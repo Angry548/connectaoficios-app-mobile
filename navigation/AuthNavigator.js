@@ -1,13 +1,10 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
+import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
 
 const Stack = createNativeStackNavigator();
-
-function LoginPendienteScreen() {
-  return null;
-}
 
 export default function AuthNavigator() {
   return (
@@ -26,18 +23,18 @@ export default function AuthNavigator() {
       />
 
       <Stack.Screen
-        name="Register"
-        component={RegisterScreen}
+        name="Login"
+        component={LoginScreen}
         options={{
-          title: 'Registro',
+          title: 'Iniciar sesión',
         }}
       />
 
       <Stack.Screen
-        name="Login"
-        component={LoginPendienteScreen}
+        name="Register"
+        component={RegisterScreen}
         options={{
-          title: 'Iniciar sesión',
+          title: 'Registro',
         }}
       />
     </Stack.Navigator>

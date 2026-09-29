@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { secureStorage } from '../storage/secureStorage';
+import { authService } from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -16,8 +16,8 @@ export function AuthProvider({ children }) {
 
   const comprobarSesion = useCallback(async () => {
     try {
-      const token = await secureStorage.obtenerToken();
-      setEstaAutenticado(Boolean(token));
+      const autenticado = await authService.estaAutenticado();
+      setEstaAutenticado(autenticado);
     } catch {
       setEstaAutenticado(false);
     } finally {
@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const cerrarSesion = useCallback(async () => {
-    await secureStorage.eliminarToken();
+    await authService.logout();
     setEstaAutenticado(false);
   }, []);
 
@@ -66,7 +66,9 @@ export function useAuth() {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error('useAuth debe utilizarse dentro de AuthProvider');
+    throw new Error(
+      'useAuth debe utilizarse dentro de AuthProvider'
+    );
   }
 
   return context;
