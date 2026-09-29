@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  SafeAreaView,
   View,
   Text,
   TextInput,
@@ -11,16 +10,48 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
+  Keyboard,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { userService } from '../../services/userService';
 
 export default function RegisterScreen({ navigation }) {
   const [nombre, setNombre] = useState('');
   const [correo, setCorreo] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmarPassword, setConfirmarPassword] = useState('');
+  const [confirmarPassword, setConfirmarPassword] =
+    useState('');
   const [rolId, setRolId] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [alturaTeclado, setAlturaTeclado] = useState(0);
+  const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [
+    mostrarConfirmarPassword,
+    setMostrarConfirmarPassword,
+  ] = useState(false);
+
+  useEffect(() => {
+    const mostrarTeclado = Keyboard.addListener(
+      'keyboardDidShow',
+      (event) => {
+        setAlturaTeclado(event.endCoordinates.height);
+      }
+    );
+
+    const ocultarTeclado = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setAlturaTeclado(0);
+      }
+    );
+
+    return () => {
+      mostrarTeclado.remove();
+      ocultarTeclado.remove();
+    };
+  }, []);
 
   const limpiarFormulario = () => {
     setNombre('');
@@ -28,6 +59,8 @@ export default function RegisterScreen({ navigation }) {
     setPassword('');
     setConfirmarPassword('');
     setRolId(null);
+    setMostrarPassword(false);
+    setMostrarConfirmarPassword(false);
   };
 
   const validarFormulario = () => {
@@ -79,24 +112,23 @@ export default function RegisterScreen({ navigation }) {
     setCargando(true);
 
     try {
-      const datosUsuario = {
+      await userService.registrar({
         nombre: nombre.trim(),
         correo: correo.trim().toLowerCase(),
         password,
         rolId,
-      };
-
-      await userService.registrar(datosUsuario);
+      });
 
       limpiarFormulario();
 
       Alert.alert(
-        'Registro exitoso',
-        'Tu cuenta fue creada correctamente. Ahora puedes iniciar sesión.',
+        'Cuenta creada',
+        'Tu registro se completó correctamente. Ya puedes iniciar sesión.',
         [
           {
-            text: 'Continuar',
-            onPress: () => navigation.navigate('Login'),
+            text: 'Iniciar sesión',
+            onPress: () =>
+              navigation.navigate('Login'),
           },
         ]
       );
@@ -115,67 +147,153 @@ export default function RegisterScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="#F8FAFC"
+      />
+
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContenido}
-          keyboardShouldPersistTaps="handled"
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContenido,
+            alturaTeclado > 0 && {
+              paddingBottom: alturaTeclado + 24,
+            },
+          ]}
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
+          showsVerticalScrollIndicator={false}
         >
           <View style={styles.encabezado}>
-            <Text style={styles.titulo}>Crear cuenta</Text>
+            <Text style={styles.etiquetaMarca}>
+              CONNECTAOFICIOS
+            </Text>
+
+            <Text style={styles.titulo}>
+              Crea tu cuenta
+            </Text>
+
             <Text style={styles.subtitulo}>
-              Regístrate para comenzar a utilizar ConnectaOficios
+              Elige cómo deseas formar parte de nuestra comunidad.
             </Text>
           </View>
 
-          <View style={styles.formulario}>
-            <Text style={styles.label}>Nombre completo</Text>
+          <View style={styles.tarjeta}>
+            <Text style={styles.label}>
+              Nombre completo
+            </Text>
+
             <TextInput
               style={styles.input}
-              placeholder="Ingresa tu nombre completo"
+              placeholder="Tu nombre completo"
+              placeholderTextColor="#94A3B8"
               value={nombre}
               onChangeText={setNombre}
               autoCapitalize="words"
               editable={!cargando}
+              returnKeyType="next"
             />
 
-            <Text style={styles.label}>Correo electrónico</Text>
+            <Text style={styles.label}>
+              Correo electrónico
+            </Text>
+
             <TextInput
               style={styles.input}
               placeholder="correo@ejemplo.com"
+              placeholderTextColor="#94A3B8"
               value={correo}
               onChangeText={setCorreo}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
               editable={!cargando}
+              returnKeyType="next"
             />
 
-            <Text style={styles.label}>Contraseña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ingresa tu contraseña"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!cargando}
-            />
+            <Text style={styles.label}>
+              Contraseña
+            </Text>
 
-            <Text style={styles.label}>Confirmar contraseña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Confirma tu contraseña"
-              value={confirmarPassword}
-              onChangeText={setConfirmarPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!cargando}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Crea una contraseña"
+                placeholderTextColor="#94A3B8"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!mostrarPassword}
+                autoCapitalize="none"
+                editable={!cargando}
+                returnKeyType="next"
+              />
 
-            <Text style={styles.label}>Tipo de usuario</Text>
+              <TouchableOpacity
+                style={styles.botonOjo}
+                onPress={() =>
+                  setMostrarPassword(!mostrarPassword)
+                }
+                disabled={cargando}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={
+                    mostrarPassword
+                      ? 'eye-off-outline'
+                      : 'eye-outline'
+                  }
+                  size={23}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.label}>
+              Confirmar contraseña
+            </Text>
+
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Repite tu contraseña"
+                placeholderTextColor="#94A3B8"
+                value={confirmarPassword}
+                onChangeText={setConfirmarPassword}
+                secureTextEntry={!mostrarConfirmarPassword}
+                autoCapitalize="none"
+                editable={!cargando}
+                returnKeyType="done"
+              />
+
+              <TouchableOpacity
+                style={styles.botonOjo}
+                onPress={() =>
+                  setMostrarConfirmarPassword(
+                    !mostrarConfirmarPassword
+                  )
+                }
+                disabled={cargando}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={
+                    mostrarConfirmarPassword
+                      ? 'eye-off-outline'
+                      : 'eye-outline'
+                  }
+                  size={23}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.label}>
+              Quiero utilizar ConnectaOficios como
+            </Text>
 
             <View style={styles.roles}>
               <TouchableOpacity
@@ -185,22 +303,38 @@ export default function RegisterScreen({ navigation }) {
                 ]}
                 onPress={() => setRolId(1)}
                 disabled={cargando}
+                activeOpacity={0.8}
               >
+                <View
+                  style={[
+                    styles.indicadorRol,
+                    rolId === 1 &&
+                      styles.indicadorRolSeleccionado,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.numeroRol,
+                      rolId === 1 &&
+                        styles.numeroRolSeleccionado,
+                    ]}
+                  >
+                    C
+                  </Text>
+                </View>
+
                 <Text
                   style={[
                     styles.rolTitulo,
-                    rolId === 1 && styles.rolTextoSeleccionado,
+                    rolId === 1 &&
+                      styles.rolTituloSeleccionado,
                   ]}
                 >
                   Cliente
                 </Text>
-                <Text
-                  style={[
-                    styles.rolDescripcion,
-                    rolId === 1 && styles.rolTextoSeleccionado,
-                  ]}
-                >
-                  Quiero contratar servicios
+
+                <Text style={styles.rolDescripcion}>
+                  Necesito contratar servicios.
                 </Text>
               </TouchableOpacity>
 
@@ -211,54 +345,74 @@ export default function RegisterScreen({ navigation }) {
                 ]}
                 onPress={() => setRolId(2)}
                 disabled={cargando}
+                activeOpacity={0.8}
               >
+                <View
+                  style={[
+                    styles.indicadorRol,
+                    rolId === 2 &&
+                      styles.indicadorRolSeleccionado,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.numeroRol,
+                      rolId === 2 &&
+                        styles.numeroRolSeleccionado,
+                    ]}
+                  >
+                    T
+                  </Text>
+                </View>
+
                 <Text
                   style={[
                     styles.rolTitulo,
-                    rolId === 2 && styles.rolTextoSeleccionado,
+                    rolId === 2 &&
+                      styles.rolTituloSeleccionado,
                   ]}
                 >
                   Trabajador
                 </Text>
-                <Text
-                  style={[
-                    styles.rolDescripcion,
-                    rolId === 2 && styles.rolTextoSeleccionado,
-                  ]}
-                >
-                  Quiero ofrecer mis servicios
+
+                <Text style={styles.rolDescripcion}>
+                  Quiero ofrecer mis servicios.
                 </Text>
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity
               style={[
-                styles.botonRegistrar,
+                styles.boton,
                 cargando && styles.botonDeshabilitado,
               ]}
               onPress={registrarUsuario}
               disabled={cargando}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               {cargando ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <Text style={styles.textoBotonRegistrar}>
-                  Crear cuenta
+                <Text style={styles.textoBoton}>
+                  Crear mi cuenta
                 </Text>
               )}
             </TouchableOpacity>
 
-            <View style={styles.iniciarSesionContainer}>
-              <Text style={styles.textoCuenta}>
-                ¿Ya tienes una cuenta?{' '}
+            <View style={styles.loginContainer}>
+              <Text style={styles.textoSecundario}>
+                ¿Ya tienes una cuenta?
               </Text>
 
               <TouchableOpacity
-                onPress={() => navigation.navigate('Login')}
+                onPress={() =>
+                  navigation.navigate('Login')
+                }
                 disabled={cargando}
               >
-                <Text style={styles.enlace}>Iniciar sesión</Text>
+                <Text style={styles.enlace}>
+                  Iniciar sesión
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -271,109 +425,166 @@ export default function RegisterScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
+  },
+  scroll: {
+    flex: 1,
   },
   scrollContenido: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 30,
+    paddingHorizontal: 20,
+    paddingTop: 28,
     paddingBottom: 40,
   },
   encabezado: {
-    marginBottom: 30,
+    marginBottom: 22,
   },
-  titulo: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#111827',
+  etiquetaMarca: {
+    color: '#0D9488',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.4,
     marginBottom: 8,
   },
-  subtitulo: {
-    fontSize: 15,
-    color: '#6B7280',
-    lineHeight: 22,
+  titulo: {
+    color: '#172B3A',
+    fontSize: 29,
+    fontWeight: '800',
   },
-  formulario: {
-    width: '100%',
+  subtitulo: {
+    color: '#64748B',
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 7,
+  },
+  tarjeta: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 20,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '700',
     marginBottom: 7,
   },
   input: {
+    minHeight: 51,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 16,
-    color: '#111827',
-    marginBottom: 18,
+    color: '#172B3A',
+    fontSize: 15,
+    marginBottom: 17,
+  },
+  passwordContainer: {
+    minHeight: 51,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 17,
+  },
+  passwordInput: {
+    flex: 1,
+    minHeight: 49,
+    paddingLeft: 14,
+    paddingRight: 8,
+    color: '#172B3A',
+    fontSize: 15,
+  },
+  botonOjo: {
+    width: 50,
+    height: 49,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   roles: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
+    gap: 10,
+    marginTop: 3,
+    marginBottom: 22,
   },
   rol: {
     flex: 1,
-    minHeight: 90,
+    minHeight: 142,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
-    padding: 12,
-    justifyContent: 'center',
+    borderColor: '#CBD5E1',
+    borderRadius: 14,
+    padding: 13,
   },
   rolSeleccionado: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: '#ECFDF9',
+    borderColor: '#0D9488',
+    borderWidth: 2,
   },
-  rolTitulo: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 5,
-  },
-  rolDescripcion: {
-    fontSize: 12,
-    color: '#6B7280',
-    lineHeight: 17,
-  },
-  rolTextoSeleccionado: {
-    color: '#FFFFFF',
-  },
-  botonRegistrar: {
-    minHeight: 52,
-    backgroundColor: '#2563EB',
+  indicadorRol: {
+    width: 34,
+    height: 34,
     borderRadius: 10,
+    backgroundColor: '#E2E8F0',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 4,
+    marginBottom: 10,
+  },
+  indicadorRolSeleccionado: {
+    backgroundColor: '#0D9488',
+  },
+  numeroRol: {
+    color: '#475569',
+    fontWeight: '800',
+  },
+  numeroRolSeleccionado: {
+    color: '#FFFFFF',
+  },
+  rolTitulo: {
+    color: '#172B3A',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  rolTituloSeleccionado: {
+    color: '#0F766E',
+  },
+  rolDescripcion: {
+    color: '#64748B',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 5,
+  },
+  boton: {
+    minHeight: 54,
+    borderRadius: 13,
+    backgroundColor: '#0D9488',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   botonDeshabilitado: {
     opacity: 0.65,
   },
-  textoBotonRegistrar: {
+  textoBoton: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  iniciarSesionContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  loginContainer: {
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 22,
   },
-  textoCuenta: {
-    color: '#6B7280',
-    fontSize: 14,
+  textoSecundario: {
+    color: '#64748B',
+    fontSize: 13,
   },
   enlace: {
-    color: '#2563EB',
+    color: '#0D9488',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    marginTop: 5,
   },
 });
