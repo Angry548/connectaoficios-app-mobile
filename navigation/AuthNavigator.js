@@ -1,48 +1,45 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import WelcomeScreen from '../screens/auth/WelcomeScreen';
+import RegisterScreen from '../screens/auth/RegisterScreen';
 
 const Stack = createNativeStackNavigator();
 
-function EstructuraInicialScreen() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.titulo}>ConnectaOficios</Text>
-      <Text style={styles.texto}>
-        Aplicación móvil configurada correctamente
-      </Text>
-    </View>
-  );
+function LoginPendienteScreen() {
+  return null;
 }
 
 export default function AuthNavigator() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      initialRouteName="Welcome"
+      screenOptions={{
+        headerBackTitle: 'Atrás',
+      }}
+    >
       <Stack.Screen
-        name="EstructuraInicial"
-        component={EstructuraInicialScreen}
+        name="Welcome"
+        component={WelcomeScreen}
         options={{
           headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="Register"
+        component={RegisterScreen}
+        options={{
+          title: 'Registro',
+        }}
+      />
+
+      <Stack.Screen
+        name="Login"
+        component={LoginPendienteScreen}
+        options={{
+          title: 'Iniciar sesión',
         }}
       />
     </Stack.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  titulo: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  texto: {
-    fontSize: 16,
-    textAlign: 'center',
-  },
-});
