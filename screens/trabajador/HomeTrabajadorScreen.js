@@ -91,6 +91,9 @@ export default function HomeTrabajadorScreen({ navigation }) {
           <View style={styles.grid}>
             <TouchableOpacity
               style={styles.tarjeta}
+              onPress={() =>
+                navigation.navigate('MisServicios')
+              }
               activeOpacity={0.8}
             >
               <View style={styles.icono}>
