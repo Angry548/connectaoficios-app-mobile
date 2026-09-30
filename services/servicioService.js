@@ -205,7 +205,7 @@ export const servicioService = {
     size = 20
   ) => {
     if (!zonaId) {
-      throw new Error('La zona de cobertura es obligatoria.');
+      throw new Error('la zona de cobertura es obligatoria.');
     }
 
     const response = await apiJava.get(
@@ -370,3 +370,7 @@ export const servicioService = {
     return true;
   },
 };
+
+
+
+
