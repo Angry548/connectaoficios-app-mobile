@@ -15,17 +15,21 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { authService } from '../../services/authService';
-import { useAuth } from '../../context/AuthContext';
+import { passwordService } from '../../services/passwordService';
 
-export default function LoginScreen({ navigation }) {
-  const { iniciarSesion } = useAuth();
-
-  const [correo, setCorreo] = useState('');
+export default function ResetPasswordScreen({ navigation }) {
+  const [token, setToken] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmarPassword, setConfirmarPassword] =
+    useState('');
+  const [mostrarPassword, setMostrarPassword] =
+    useState(false);
+  const [
+    mostrarConfirmarPassword,
+    setMostrarConfirmarPassword,
+  ] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [alturaTeclado, setAlturaTeclado] = useState(0);
-  const [mostrarPassword, setMostrarPassword] = useState(false);
 
   useEffect(() => {
     const mostrarTeclado = Keyboard.addListener(
@@ -49,18 +53,30 @@ export default function LoginScreen({ navigation }) {
   }, []);
 
   const validarFormulario = () => {
-    if (!correo.trim() || !password) {
+    if (
+      !token.trim() ||
+      !password ||
+      !confirmarPassword
+    ) {
       Alert.alert(
         'Campos requeridos',
-        'Ingresa tu correo electrónico y contraseña.'
+        'Completa todos los campos.'
       );
       return false;
     }
 
-    if (!correo.includes('@')) {
+    if (password.length < 6) {
       Alert.alert(
-        'Correo inválido',
-        'Ingresa una dirección de correo electrónico válida.'
+        'Contraseña inválida',
+        'La nueva contraseña debe contener al menos 6 caracteres.'
+      );
+      return false;
+    }
+
+    if (password !== confirmarPassword) {
+      Alert.alert(
+        'Contraseñas diferentes',
+        'La nueva contraseña y su confirmación no coinciden.'
       );
       return false;
     }
@@ -68,7 +84,7 @@ export default function LoginScreen({ navigation }) {
     return true;
   };
 
-  const manejarLogin = async () => {
+  const manejarRestablecimiento = async () => {
     if (!validarFormulario()) {
       return;
     }
@@ -76,31 +92,35 @@ export default function LoginScreen({ navigation }) {
     setCargando(true);
 
     try {
-      await authService.login(
-        correo.trim().toLowerCase(),
-        password
+      const data =
+        await passwordService.restablecerPassword(
+          token,
+          password
+        );
+
+      Alert.alert(
+        'Contraseña actualizada',
+        data?.message ||
+          'Tu contraseña fue restablecida correctamente.',
+        [
+          {
+            text: 'Iniciar sesión',
+            onPress: () =>
+              navigation.navigate('Login'),
+          },
+        ]
       );
-
-      await iniciarSesion();
     } catch (error) {
-      let mensaje =
-        'No fue posible iniciar sesión. Verifica tus credenciales.';
+      const mensaje =
+        error.response?.data?.message ||
+        error.response?.data?.mensaje ||
+        error.message ||
+        'No fue posible restablecer la contraseña.';
 
-      if (!error.response) {
-        mensaje =
-          error.message ||
-          'No fue posible establecer conexión con el servidor.';
-      } else if (error.response.status === 401) {
-        mensaje = 'Correo o contraseña incorrectos.';
-      } else {
-        mensaje =
-          error.response?.data?.message ||
-          error.response?.data?.mensaje ||
-          error.response?.data?.title ||
-          mensaje;
-      }
-
-      Alert.alert('Error de inicio de sesión', mensaje);
+      Alert.alert(
+        'Error de recuperación',
+        mensaje
+      );
     } finally {
       setCargando(false);
     }
@@ -141,128 +161,133 @@ export default function LoginScreen({ navigation }) {
 
           <View style={styles.tarjeta}>
             <Text style={styles.titulo}>
-              Bienvenido de nuevo
+              Nueva contraseña
             </Text>
 
             <Text style={styles.subtitulo}>
-              Ingresa a tu cuenta para continuar.
+              Ingresa el código recibido por correo y define
+              una nueva contraseña para tu cuenta.
             </Text>
 
-            <View style={styles.formulario}>
-              <Text style={styles.label}>
-                Correo electrónico
-              </Text>
+            <Text style={styles.label}>
+              Código de recuperación
+            </Text>
 
+            <TextInput
+              style={styles.input}
+              placeholder="Ingresa el código recibido"
+              placeholderTextColor="#94A3B8"
+              value={token}
+              onChangeText={setToken}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!cargando}
+            />
+
+            <Text style={styles.label}>
+              Nueva contraseña
+            </Text>
+
+            <View style={styles.passwordContainer}>
               <TextInput
-                style={styles.input}
-                placeholder="correo@ejemplo.com"
+                style={styles.passwordInput}
+                placeholder="Ingresa la nueva contraseña"
                 placeholderTextColor="#94A3B8"
-                value={correo}
-                onChangeText={setCorreo}
-                keyboardType="email-address"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!mostrarPassword}
                 autoCapitalize="none"
-                autoCorrect={false}
                 editable={!cargando}
-                returnKeyType="next"
               />
 
-              <Text style={styles.label}>
-                Contraseña
-              </Text>
-
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="Ingresa tu contraseña"
-                  placeholderTextColor="#94A3B8"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!mostrarPassword}
-                  autoCapitalize="none"
-                  editable={!cargando}
-                  returnKeyType="done"
-                  onSubmitEditing={manejarLogin}
-                />
-
-                <TouchableOpacity
-                  style={styles.botonOjo}
-                  onPress={() =>
-                    setMostrarPassword(!mostrarPassword)
-                  }
-                  disabled={cargando}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={
-                      mostrarPassword
-                        ? 'eye-off-outline'
-                        : 'eye-outline'
-                    }
-                    size={23}
-                    color="#64748B"
-                  />
-                </TouchableOpacity>
-              </View>
-
-<TouchableOpacity
-  style={styles.olvidoPassword}
-  onPress={() =>
-    navigation.navigate('ForgotPassword')
-  }
-  disabled={cargando}
-  activeOpacity={0.7}
->
-  <Text style={styles.textoOlvidoPassword}>
-    ¿Olvidaste tu contraseña?
-  </Text>
-</TouchableOpacity>
-
               <TouchableOpacity
-                style={[
-                  styles.boton,
-                  cargando && styles.botonDeshabilitado,
-                ]}
-                onPress={manejarLogin}
-                disabled={cargando}
-                activeOpacity={0.85}
-              >
-                {cargando ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.textoBoton}>
-                    Iniciar sesión
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.registroContainer}>
-              <Text style={styles.textoSecundario}>
-                ¿Aún no tienes una cuenta?
-              </Text>
-
-              <TouchableOpacity
+                style={styles.botonOjo}
                 onPress={() =>
-                  navigation.navigate('Register')
+                  setMostrarPassword(!mostrarPassword)
                 }
                 disabled={cargando}
+                activeOpacity={0.7}
               >
-                <Text style={styles.enlace}>
-                  Crear cuenta
-                </Text>
+                <Ionicons
+                  name={
+                    mostrarPassword
+                      ? 'eye-off-outline'
+                      : 'eye-outline'
+                  }
+                  size={23}
+                  color="#64748B"
+                />
               </TouchableOpacity>
             </View>
+
+            <Text style={styles.label}>
+              Confirmar nueva contraseña
+            </Text>
+
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Confirma la nueva contraseña"
+                placeholderTextColor="#94A3B8"
+                value={confirmarPassword}
+                onChangeText={setConfirmarPassword}
+                secureTextEntry={!mostrarConfirmarPassword}
+                autoCapitalize="none"
+                editable={!cargando}
+                returnKeyType="done"
+                onSubmitEditing={manejarRestablecimiento}
+              />
+
+              <TouchableOpacity
+                style={styles.botonOjo}
+                onPress={() =>
+                  setMostrarConfirmarPassword(
+                    !mostrarConfirmarPassword
+                  )
+                }
+                disabled={cargando}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={
+                    mostrarConfirmarPassword
+                      ? 'eye-off-outline'
+                      : 'eye-outline'
+                  }
+                  size={23}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.boton,
+                cargando && styles.botonDeshabilitado,
+              ]}
+              onPress={manejarRestablecimiento}
+              disabled={cargando}
+              activeOpacity={0.85}
+            >
+              {cargando ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.textoBoton}>
+                  Restablecer contraseña
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
             style={styles.volver}
             onPress={() =>
-              navigation.navigate('Welcome')
+              navigation.navigate('ForgotPassword')
             }
             disabled={cargando}
           >
             <Text style={styles.textoVolver}>
-              Volver a la bienvenida
+              Solicitar un nuevo código
             </Text>
           </TouchableOpacity>
         </ScrollView>
@@ -323,11 +348,9 @@ const styles = StyleSheet.create({
   subtitulo: {
     color: '#64748B',
     fontSize: 14,
+    lineHeight: 21,
     marginTop: 6,
     marginBottom: 26,
-  },
-  formulario: {
-    width: '100%',
   },
   label: {
     color: '#334155',
@@ -370,18 +393,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-olvidoPassword: {
-  alignSelf: 'flex-end',
-  marginTop: -7,
-  marginBottom: 18,
-},
-textoOlvidoPassword: {
-  color: '#0D9488',
-  fontSize: 13,
-  fontWeight: '700',
-},
-
   boton: {
     minHeight: 54,
     backgroundColor: '#0D9488',
@@ -397,20 +408,6 @@ textoOlvidoPassword: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
-  },
-  registroContainer: {
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  textoSecundario: {
-    color: '#64748B',
-    fontSize: 13,
-  },
-  enlace: {
-    color: '#0D9488',
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 5,
   },
   volver: {
     alignItems: 'center',

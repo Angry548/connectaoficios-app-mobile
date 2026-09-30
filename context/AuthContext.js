@@ -7,66 +7,87 @@ import React, {
   useState,
 } from 'react';
 import { authService } from '../services/authService';
+import { authEvents } from '../services/authEvents';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [estaAutenticado, setEstaAutenticado] = useState(false);
   const [verificandoSesion, setVerificandoSesion] = useState(true);
-  const [rol, setRol] = useState(null);
+  const [usuario, setUsuario] = useState(null);
+
+  const limpiarSesionLocal = useCallback(() => {
+    setUsuario(null);
+    setEstaAutenticado(false);
+  }, []);
 
   const comprobarSesion = useCallback(async () => {
     try {
       const autenticado = await authService.estaAutenticado();
 
       if (!autenticado) {
-        setEstaAutenticado(false);
-        setRol(null);
+        limpiarSesionLocal();
         return;
       }
 
-      const rolActual = await authService.obtenerRol();
+      const usuarioActual = await authService.obtenerUsuario();
 
-      setRol(rolActual);
+      if (!usuarioActual) {
+        limpiarSesionLocal();
+        return;
+      }
+
+      setUsuario(usuarioActual);
       setEstaAutenticado(true);
     } catch {
-      setEstaAutenticado(false);
-      setRol(null);
+      limpiarSesionLocal();
     } finally {
       setVerificandoSesion(false);
     }
-  }, []);
+  }, [limpiarSesionLocal]);
 
   useEffect(() => {
     comprobarSesion();
   }, [comprobarSesion]);
 
-  const iniciarSesion = useCallback(async () => {
-    const autenticado = await authService.estaAutenticado();
+  useEffect(() => {
+    authEvents.configurarManejadorSesionExpirada(
+      limpiarSesionLocal
+    );
 
-    if (!autenticado) {
-      setEstaAutenticado(false);
-      setRol(null);
-      return;
+    return () => {
+      authEvents.limpiarManejadorSesionExpirada();
+    };
+  }, [limpiarSesionLocal]);
+
+  const iniciarSesion = useCallback(async () => {
+    const usuarioActual = await authService.obtenerUsuario();
+
+    if (!usuarioActual) {
+      limpiarSesionLocal();
+      return false;
     }
 
-    const rolActual = await authService.obtenerRol();
-
-    setRol(rolActual);
+    setUsuario(usuarioActual);
     setEstaAutenticado(true);
-  }, []);
+
+    return true;
+  }, [limpiarSesionLocal]);
 
   const cerrarSesion = useCallback(async () => {
-    await authService.logout();
-    setRol(null);
-    setEstaAutenticado(false);
-  }, []);
+    try {
+      await authService.logout();
+    } finally {
+      limpiarSesionLocal();
+    }
+  }, [limpiarSesionLocal]);
 
   const value = useMemo(
     () => ({
       estaAutenticado,
       verificandoSesion,
-      rol,
+      usuario,
+      rol: usuario?.rol ?? null,
       iniciarSesion,
       cerrarSesion,
       comprobarSesion,
@@ -74,7 +95,7 @@ export function AuthProvider({ children }) {
     [
       estaAutenticado,
       verificandoSesion,
-      rol,
+      usuario,
       iniciarSesion,
       cerrarSesion,
       comprobarSesion,

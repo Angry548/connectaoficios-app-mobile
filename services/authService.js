@@ -4,30 +4,44 @@ import { secureStorage } from '../storage/secureStorage';
 
 const ROLES_MOVIL = ['CLIENTE', 'TRABAJADOR'];
 
-const obtenerRolToken = (token) => {
+const obtenerPayloadToken = (token) => {
   try {
-    const payload = jwtDecode(token);
-
-    const rol =
-      payload?.role ||
-      payload?.Role ||
-      payload?.roles ||
-      payload?.[
-        'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
-      ];
-
-    if (Array.isArray(rol)) {
-      return rol.length > 0
-        ? String(rol[0]).trim().toUpperCase()
-        : null;
-    }
-
-    return rol
-      ? String(rol).trim().toUpperCase()
-      : null;
+    return jwtDecode(token);
   } catch {
     return null;
   }
+};
+
+const normalizarRol = (rol) => {
+  if (Array.isArray(rol)) {
+    rol = rol.length > 0 ? rol[0] : null;
+  }
+
+  return rol
+    ? String(rol).trim().toUpperCase()
+    : null;
+};
+
+const obtenerRolPayload = (payload) => {
+  if (!payload) {
+    return null;
+  }
+
+  const rol =
+    payload?.role ||
+    payload?.Role ||
+    payload?.roles ||
+    payload?.[
+      'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
+    ];
+
+  return normalizarRol(rol);
+};
+
+const obtenerRolToken = (token) => {
+  const payload = obtenerPayloadToken(token);
+
+  return obtenerRolPayload(payload);
 };
 
 const esRolMovil = (rol) => {
@@ -35,7 +49,15 @@ const esRolMovil = (rol) => {
 };
 
 const validarTokenMovil = (token) => {
-  const rol = obtenerRolToken(token);
+  const payload = obtenerPayloadToken(token);
+
+  if (!payload) {
+    throw new Error(
+      'El token de autenticación no es válido.'
+    );
+  }
+
+  const rol = obtenerRolPayload(payload);
 
   if (!rol) {
     throw new Error(
@@ -49,7 +71,59 @@ const validarTokenMovil = (token) => {
     );
   }
 
-  return rol;
+  if (payload.exp) {
+    const tiempoActual = Math.floor(Date.now() / 1000);
+
+    if (payload.exp <= tiempoActual) {
+      throw new Error(
+        'La sesión ha expirado. Inicia sesión nuevamente.'
+      );
+    }
+  }
+
+  return {
+    payload,
+    rol,
+  };
+};
+
+const construirUsuarioDesdeToken = (token) => {
+  const { payload, rol } = validarTokenMovil(token);
+
+  const id =
+    payload?.nameid ||
+    payload?.sub ||
+    payload?.id ||
+    payload?.userId ||
+    payload?.usuarioId ||
+    payload?.[
+      'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'
+    ] ||
+    null;
+
+  const nombre =
+    payload?.unique_name ||
+    payload?.name ||
+    payload?.nombre ||
+    payload?.[
+      'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'
+    ] ||
+    null;
+
+  const correo =
+    payload?.email ||
+    payload?.correo ||
+    payload?.[
+      'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress'
+    ] ||
+    null;
+
+  return {
+    id: id !== null ? String(id) : null,
+    nombre: nombre ? String(nombre) : null,
+    correo: correo ? String(correo) : null,
+    rol,
+  };
 };
 
 export const authService = {
@@ -67,13 +141,14 @@ export const authService = {
       );
     }
 
-    const rol = validarTokenMovil(data.token);
+    const usuario = construirUsuarioDesdeToken(data.token);
 
     await secureStorage.guardarToken(data.token);
 
     return {
       ...data,
-      rol,
+      usuario,
+      rol: usuario.rol,
     };
   },
 
@@ -83,6 +158,21 @@ export const authService = {
 
   obtenerToken: async () => {
     return await secureStorage.obtenerToken();
+  },
+
+  obtenerUsuario: async () => {
+    const token = await secureStorage.obtenerToken();
+
+    if (!token) {
+      return null;
+    }
+
+    try {
+      return construirUsuarioDesdeToken(token);
+    } catch {
+      await secureStorage.eliminarToken();
+      return null;
+    }
   },
 
   obtenerRol: async () => {

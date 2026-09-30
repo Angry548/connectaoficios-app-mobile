@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_CONFIG } from '../config/apiConfig';
 import { secureStorage } from '../storage/secureStorage';
+import { authEvents } from './authEvents';
 
 const apiDotNet = axios.create({
   baseURL: API_CONFIG.DOTNET_URL,
@@ -32,6 +33,7 @@ apiDotNet.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       await secureStorage.eliminarToken();
+      authEvents.notificarSesionExpirada();
     }
 
     return Promise.reject(error);
