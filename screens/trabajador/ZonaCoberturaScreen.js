@@ -1,7 +1,7 @@
 import React, {
   useCallback,
   useEffect,
-  useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -23,18 +23,17 @@ export default function ZonaCoberturaScreen({
   navigation,
 }) {
   const servicioId = route?.params?.servicioId;
-
-  const [zonas, setZonas] = useState([]);
-  const [seleccionadas, setSeleccionadas] =
+  const [seleccionadas, setSeleccionadas] = useState([]);
+  const [zonasSeleccionadas, setZonasSeleccionadas] =
     useState([]);
-  const [busqueda, setBusqueda] =
-    useState('');
-  const [cargando, setCargando] =
-    useState(true);
-  const [guardando, setGuardando] =
-    useState(false);
-  const [error, setError] =
-    useState('');
+  const [busqueda, setBusqueda] = useState('');
+  const [resultados, setResultados] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [buscando, setBuscando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState('');
+  const [errorBusqueda, setErrorBusqueda] = useState('');
+  const solicitudRef = useRef(0);
 
   const cargarDatos = useCallback(async () => {
     if (!servicioId) {
@@ -49,18 +48,18 @@ export default function ZonaCoberturaScreen({
     setError('');
 
     try {
-      const [
-        zonasDisponibles,
-        zonasServicio,
-      ] = await Promise.all([
-        zonaCoberturaService.listarActivas(),
-        zonaCoberturaService.obtenerZonasDelServicio(
+      const ids =
+        await zonaCoberturaService.obtenerZonasDelServicio(
           servicioId
-        ),
-      ]);
+        );
 
-      setZonas(zonasDisponibles);
-      setSeleccionadas(zonasServicio);
+      const detalles =
+        await zonaCoberturaService.obtenerDetalleZonasPorIds(
+          ids
+        );
+
+      setSeleccionadas(ids);
+      setZonasSeleccionadas(detalles);
     } catch (err) {
       const data = err?.response?.data;
 
@@ -79,39 +78,98 @@ export default function ZonaCoberturaScreen({
     cargarDatos();
   }, [cargarDatos]);
 
-  const zonasFiltradas = useMemo(() => {
-    const texto =
-      busqueda.trim().toLowerCase();
+  useEffect(() => {
+    const texto = busqueda.trim();
 
-    if (!texto) {
-      return zonas;
+    if (texto.length < 2) {
+      setResultados([]);
+      setBuscando(false);
+      setErrorBusqueda('');
+      return;
     }
 
-    return zonas.filter((zona) => {
-      const contenido = [
-        zona.departamento,
-        zona.municipio,
-        zona.localidad,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+    const solicitudActual = ++solicitudRef.current;
 
-      return contenido.includes(texto);
-    });
-  }, [zonas, busqueda]);
+    const temporizador = setTimeout(async () => {
+      setBuscando(true);
+      setErrorBusqueda('');
 
-  const alternarZona = (id) => {
-    const zonaId = Number(id);
+      try {
+        const data =
+          await zonaCoberturaService.buscar(
+            texto,
+            10
+          );
 
-    setSeleccionadas((actuales) => {
-      if (actuales.includes(zonaId)) {
-        return actuales.filter(
+        if (
+          solicitudActual ===
+          solicitudRef.current
+        ) {
+          setResultados(data);
+        }
+      } catch (err) {
+        if (
+          solicitudActual ===
+          solicitudRef.current
+        ) {
+          setResultados([]);
+          setErrorBusqueda(
+            err?.response?.data?.message ||
+              err?.response?.data?.mensaje ||
+              err?.message ||
+              'No se pudieron buscar las zonas.'
+          );
+        }
+      } finally {
+        if (
+          solicitudActual ===
+          solicitudRef.current
+        ) {
+          setBuscando(false);
+        }
+      }
+    }, 350);
+
+    return () => clearTimeout(temporizador);
+  }, [busqueda]);
+
+  const estaSeleccionada = (id) =>
+    seleccionadas.includes(Number(id));
+
+  const alternarZona = (zona) => {
+    const zonaId = Number(zona.id);
+
+    if (estaSeleccionada(zonaId)) {
+      setSeleccionadas((actuales) =>
+        actuales.filter(
           (actual) => actual !== zonaId
-        );
+        )
+      );
+      setZonasSeleccionadas((actuales) =>
+        actuales.filter(
+          (actual) =>
+            Number(actual.id) !== zonaId
+        )
+      );
+      return;
+    }
+
+    setSeleccionadas((actuales) => [
+      ...actuales,
+      zonaId,
+    ]);
+
+    setZonasSeleccionadas((actuales) => {
+      if (
+        actuales.some(
+          (actual) =>
+            Number(actual.id) === zonaId
+        )
+      ) {
+        return actuales;
       }
 
-      return [...actuales, zonaId];
+      return [...actuales, zona];
     });
   };
 
@@ -134,14 +192,12 @@ export default function ZonaCoberturaScreen({
         [
           {
             text: 'Aceptar',
-            onPress: () =>
-              navigation.goBack(),
+            onPress: () => navigation.goBack(),
           },
         ]
       );
     } catch (err) {
       const data = err?.response?.data;
-
       let mensaje =
         data?.message ||
         data?.mensaje ||
@@ -152,9 +208,7 @@ export default function ZonaCoberturaScreen({
         data?.errors &&
         typeof data.errors === 'object'
       ) {
-        const mensajes = Object.values(
-          data.errors
-        )
+        const mensajes = Object.values(data.errors)
           .flat()
           .filter(Boolean);
 
@@ -172,14 +226,18 @@ export default function ZonaCoberturaScreen({
     }
   };
 
-  const obtenerUbicacion = (zona) => {
-    const partes = [
-      zona.municipio,
-      zona.departamento,
-    ].filter(Boolean);
+  const obtenerTituloZona = (zona) =>
+    zona.localidad ||
+    zona.municipio ||
+    'Zona de cobertura';
 
-    return partes.join(', ');
-  };
+  const obtenerUbicacion = (zona) =>
+    [
+      zona.localidad ? zona.municipio : null,
+      zona.departamento,
+    ]
+      .filter(Boolean)
+      .join(', ');
 
   if (cargando) {
     return (
@@ -187,7 +245,7 @@ export default function ZonaCoberturaScreen({
         <View style={styles.centro}>
           <ActivityIndicator size="large" />
           <Text style={styles.textoCarga}>
-            Cargando zonas...
+            Cargando zonas seleccionadas...
           </Text>
         </View>
       </SafeAreaView>
@@ -227,15 +285,14 @@ export default function ZonaCoberturaScreen({
             size={20}
             color="#667085"
           />
-
           <TextInput
             style={styles.inputBusqueda}
             value={busqueda}
             onChangeText={setBusqueda}
-            placeholder="Buscar municipio, departamento..."
+            placeholder="Escribe municipio, departamento o localidad"
             placeholderTextColor="#98A2B3"
+            autoCorrect={false}
           />
-
           {busqueda ? (
             <Pressable
               onPress={() => setBusqueda('')}
@@ -269,106 +326,176 @@ export default function ZonaCoberturaScreen({
               size={22}
               color="#B42318"
             />
-
             <Text style={styles.errorTexto}>
               {error}
             </Text>
-
-            <Pressable
-              onPress={cargarDatos}
-            >
+            <Pressable onPress={cargarDatos}>
               <Text style={styles.reintentar}>
                 Reintentar
               </Text>
             </Pressable>
           </View>
-        ) : zonasFiltradas.length === 0 ? (
-          <View style={styles.vacio}>
-            <Ionicons
-              name="location-outline"
-              size={45}
-              color="#98A2B3"
-            />
+        ) : null}
 
-            <Text style={styles.vacioTitulo}>
-              No se encontraron zonas
+        {zonasSeleccionadas.length > 0 ? (
+          <View style={styles.seccion}>
+            <Text style={styles.seccionTitulo}>
+              Zonas seleccionadas
             </Text>
 
-            <Text style={styles.vacioTexto}>
-              No hay zonas activas que coincidan con tu búsqueda.
-            </Text>
-          </View>
-        ) : (
-          zonasFiltradas.map((zona) => {
-            const seleccionada =
-              seleccionadas.includes(
-                Number(zona.id)
-              );
-
-            return (
+            {zonasSeleccionadas.map((zona) => (
               <Pressable
                 key={zona.id}
                 style={[
                   styles.zona,
-                  seleccionada &&
-                    styles.zonaSeleccionada,
+                  styles.zonaSeleccionada,
                 ]}
                 onPress={() =>
-                  alternarZona(zona.id)
+                  alternarZona(zona)
                 }
               >
                 <View
                   style={[
                     styles.iconoZona,
-                    seleccionada &&
-                      styles.iconoZonaSeleccionada,
+                    styles.iconoZonaSeleccionada,
                   ]}
                 >
                   <Ionicons
                     name="location-outline"
                     size={22}
-                    color={
-                      seleccionada
-                        ? '#FFFFFF'
-                        : '#0D9488'
-                    }
+                    color="#FFFFFF"
                   />
                 </View>
 
                 <View style={styles.zonaContenido}>
                   <Text style={styles.municipio}>
-                    {zona.localidad ||
-                      zona.municipio}
+                    {obtenerTituloZona(zona)}
                   </Text>
-
-                  {zona.localidad ? (
-                    <Text style={styles.localidad}>
-                      {zona.municipio}
-                    </Text>
-                  ) : null}
-
                   <Text style={styles.departamento}>
                     {obtenerUbicacion(zona)}
                   </Text>
                 </View>
 
                 <Ionicons
-                  name={
-                    seleccionada
-                      ? 'checkmark-circle'
-                      : 'ellipse-outline'
-                  }
+                  name="checkmark-circle"
                   size={25}
-                  color={
-                    seleccionada
-                      ? '#0D9488'
-                      : '#D0D5DD'
-                  }
+                  color="#0D9488"
                 />
               </Pressable>
-            );
-          })
-        )}
+            ))}
+          </View>
+        ) : null}
+
+        <View style={styles.seccion}>
+          <Text style={styles.seccionTitulo}>
+            Buscar zonas
+          </Text>
+
+          {busqueda.trim().length === 0 ? (
+            <View style={styles.vacio}>
+              <Ionicons
+                name="search-outline"
+                size={42}
+                color="#98A2B3"
+              />
+              <Text style={styles.vacioTitulo}>
+                Busca una zona
+              </Text>
+              <Text style={styles.vacioTexto}>
+                No cargamos todas las zonas. Escribe al menos 2 caracteres para consultar hasta 10 coincidencias.
+              </Text>
+            </View>
+          ) : busqueda.trim().length < 2 ? (
+            <Text style={styles.ayuda}>
+              Escribe al menos 2 caracteres para buscar.
+            </Text>
+          ) : buscando ? (
+            <View style={styles.estadoBusqueda}>
+              <ActivityIndicator size="small" />
+              <Text style={styles.estadoBusquedaTexto}>
+                Buscando coincidencias...
+              </Text>
+            </View>
+          ) : errorBusqueda ? (
+            <Text style={styles.errorBusqueda}>
+              {errorBusqueda}
+            </Text>
+          ) : resultados.length === 0 ? (
+            <View style={styles.vacio}>
+              <Ionicons
+                name="location-outline"
+                size={42}
+                color="#98A2B3"
+              />
+              <Text style={styles.vacioTitulo}>
+                Sin coincidencias
+              </Text>
+              <Text style={styles.vacioTexto}>
+                No encontramos zonas activas para esa búsqueda.
+              </Text>
+            </View>
+          ) : (
+            resultados.map((zona) => {
+              const seleccionada =
+                estaSeleccionada(zona.id);
+
+              return (
+                <Pressable
+                  key={zona.id}
+                  style={[
+                    styles.zona,
+                    seleccionada &&
+                      styles.zonaSeleccionada,
+                  ]}
+                  onPress={() =>
+                    alternarZona(zona)
+                  }
+                >
+                  <View
+                    style={[
+                      styles.iconoZona,
+                      seleccionada &&
+                        styles.iconoZonaSeleccionada,
+                    ]}
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={22}
+                      color={
+                        seleccionada
+                          ? '#FFFFFF'
+                          : '#0D9488'
+                      }
+                    />
+                  </View>
+
+                  <View style={styles.zonaContenido}>
+                    <Text style={styles.municipio}>
+                      {obtenerTituloZona(zona)}
+                    </Text>
+                    <Text style={styles.departamento}>
+                      {obtenerUbicacion(zona)}
+                    </Text>
+                  </View>
+
+                  <Ionicons
+                    name={
+                      seleccionada
+                        ? 'checkmark-circle'
+                        : 'ellipse-outline'
+                    }
+                    size={25}
+                    color={
+                      seleccionada
+                        ? '#0D9488'
+                        : '#D0D5DD'
+                    }
+                  />
+                </Pressable>
+              );
+            })
+          )}
+        </View>
       </ScrollView>
 
       <View style={styles.pie}>
@@ -393,7 +520,6 @@ export default function ZonaCoberturaScreen({
               color="#FFFFFF"
             />
           )}
-
           <Text style={styles.botonGuardarTexto}>
             {guardando
               ? 'Guardando...'
@@ -406,10 +532,7 @@ export default function ZonaCoberturaScreen({
 }
 
 const styles = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
+  contenedor: { flex: 1, backgroundColor: '#F8FAFC' },
   encabezado: {
     minHeight: 76,
     paddingHorizontal: 18,
@@ -427,10 +550,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  encabezadoTexto: {
-    flex: 1,
-    alignItems: 'center',
-  },
+  encabezadoTexto: { flex: 1, alignItems: 'center' },
   titulo: {
     fontSize: 19,
     fontWeight: '700',
@@ -441,9 +561,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#667085',
   },
-  espacio: {
-    width: 44,
-  },
+  espacio: { width: 44 },
   buscadorContenedor: {
     paddingHorizontal: 18,
     paddingTop: 16,
@@ -470,12 +588,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#667085',
   },
-  scroll: {
-    flex: 1,
-  },
+  scroll: { flex: 1 },
   contenido: {
     padding: 18,
     paddingBottom: 30,
+  },
+  seccion: { marginBottom: 18 },
+  seccionTitulo: {
+    marginBottom: 11,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#344054',
   },
   centro: {
     flex: 1,
@@ -513,18 +636,11 @@ const styles = StyleSheet.create({
   iconoZonaSeleccionada: {
     backgroundColor: '#0D9488',
   },
-  zonaContenido: {
-    flex: 1,
-  },
+  zonaContenido: { flex: 1 },
   municipio: {
     fontSize: 15,
     fontWeight: '700',
     color: '#101828',
-  },
-  localidad: {
-    marginTop: 2,
-    fontSize: 13,
-    color: '#475467',
   },
   departamento: {
     marginTop: 4,
@@ -551,30 +667,54 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  botonDeshabilitado: {
-    opacity: 0.6,
-  },
+  botonDeshabilitado: { opacity: 0.6 },
   vacio: {
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 36,
+    paddingHorizontal: 20,
   },
   vacioTitulo: {
-    marginTop: 12,
-    fontSize: 17,
+    marginTop: 10,
+    fontSize: 16,
     fontWeight: '700',
     color: '#101828',
   },
   vacioTexto: {
     marginTop: 6,
     fontSize: 13,
+    lineHeight: 19,
     color: '#667085',
     textAlign: 'center',
+  },
+  ayuda: {
+    paddingVertical: 18,
+    textAlign: 'center',
+    color: '#667085',
+    fontSize: 13,
+  },
+  estadoBusqueda: {
+    paddingVertical: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  estadoBusquedaTexto: {
+    marginLeft: 8,
+    color: '#667085',
+    fontSize: 13,
+  },
+  errorBusqueda: {
+    paddingVertical: 18,
+    textAlign: 'center',
+    color: '#B42318',
+    fontSize: 13,
   },
   error: {
     borderRadius: 13,
     backgroundColor: '#FEF3F2',
     padding: 15,
     alignItems: 'center',
+    marginBottom: 16,
   },
   errorTexto: {
     marginTop: 8,

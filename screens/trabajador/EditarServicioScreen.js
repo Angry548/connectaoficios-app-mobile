@@ -1,4 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,25 +19,34 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { servicioService } from '../../services/servicioService';
 
-export default function EditarServicioScreen({ route, navigation }) {
+export default function EditarServicioScreen({
+  route,
+  navigation,
+}) {
   const servicioId = route?.params?.servicioId;
-
   const [servicio, setServicio] = useState(null);
-  const [categorias, setCategorias] = useState([]);
-
   const [categoriaId, setCategoriaId] = useState(null);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] =
+    useState(null);
+  const [busquedaCategoria, setBusquedaCategoria] = useState('');
+  const [resultadosCategoria, setResultadosCategoria] =
+    useState([]);
+  const [buscandoCategoria, setBuscandoCategoria] =
+    useState(false);
+  const [errorCategoria, setErrorCategoria] = useState('');
   const [titulo, setTitulo] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [tarifaMinima, setTarifaMinima] = useState('');
   const [tarifaMaxima, setTarifaMaxima] = useState('');
   const [estado, setEstado] = useState('');
-
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
-  const [cambiandoEstado, setCambiandoEstado] = useState(false);
+  const [cambiandoEstado, setCambiandoEstado] =
+    useState(false);
   const [eliminando, setEliminando] = useState(false);
   const [error, setError] = useState('');
   const [alturaTeclado, setAlturaTeclado] = useState(0);
+  const solicitudCategoriaRef = useRef(0);
 
   useEffect(() => {
     const mostrar = Keyboard.addListener(
@@ -57,7 +71,9 @@ export default function EditarServicioScreen({ route, navigation }) {
 
   const cargarDatos = useCallback(async () => {
     if (!servicioId) {
-      setError('No se recibió el identificador del servicio.');
+      setError(
+        'No se recibió el identificador del servicio.'
+      );
       setCargando(false);
       return;
     }
@@ -66,44 +82,45 @@ export default function EditarServicioScreen({ route, navigation }) {
     setError('');
 
     try {
-      const [servicioActual, categoriasDisponibles] =
-        await Promise.all([
-          servicioService.obtenerPorId(servicioId),
-          servicioService.listarCategorias(),
-        ]);
+      const servicioActual =
+        await servicioService.obtenerPorId(servicioId);
+
+      let categoriaActual = null;
+
+      if (servicioActual?.categoriaId) {
+        categoriaActual =
+          await servicioService.obtenerCategoriaPorId(
+            servicioActual.categoriaId
+          );
+      }
 
       setServicio(servicioActual);
-      setCategorias(categoriasDisponibles);
-
       setCategoriaId(servicioActual.categoriaId ?? null);
+      setCategoriaSeleccionada(categoriaActual);
+      setBusquedaCategoria(categoriaActual?.nombre ?? '');
       setTitulo(servicioActual.titulo ?? '');
       setDescripcion(servicioActual.descripcion ?? '');
-
       setTarifaMinima(
         servicioActual.tarifaMinima !== null &&
           servicioActual.tarifaMinima !== undefined
           ? String(servicioActual.tarifaMinima)
           : ''
       );
-
       setTarifaMaxima(
         servicioActual.tarifaMaxima !== null &&
           servicioActual.tarifaMaxima !== undefined
           ? String(servicioActual.tarifaMaxima)
           : ''
       );
-
       setEstado(servicioActual.estado ?? '');
     } catch (err) {
       const data = err?.response?.data;
-
-      const mensaje =
+      setError(
         data?.message ||
-        data?.mensaje ||
-        err?.message ||
-        'No se pudo cargar la información del servicio.';
-
-      setError(mensaje);
+          data?.mensaje ||
+          err?.message ||
+          'No se pudo cargar la información del servicio.'
+      );
     } finally {
       setCargando(false);
     }
@@ -113,14 +130,98 @@ export default function EditarServicioScreen({ route, navigation }) {
     cargarDatos();
   }, [cargarDatos]);
 
-  const normalizarDecimal = (valor) => {
-    return valor.replace(',', '.').trim();
+  useEffect(() => {
+    const texto = busquedaCategoria.trim();
+
+    if (categoriaSeleccionada) {
+      setResultadosCategoria([]);
+      setBuscandoCategoria(false);
+      setErrorCategoria('');
+      return;
+    }
+
+    if (texto.length < 2) {
+      setResultadosCategoria([]);
+      setBuscandoCategoria(false);
+      setErrorCategoria('');
+      return;
+    }
+
+    const solicitudActual = ++solicitudCategoriaRef.current;
+
+    const temporizador = setTimeout(async () => {
+      setBuscandoCategoria(true);
+      setErrorCategoria('');
+
+      try {
+        const data =
+          await servicioService.buscarCategorias(
+            texto,
+            10
+          );
+
+        if (
+          solicitudActual ===
+          solicitudCategoriaRef.current
+        ) {
+          setResultadosCategoria(data);
+        }
+      } catch (err) {
+        if (
+          solicitudActual ===
+          solicitudCategoriaRef.current
+        ) {
+          setResultadosCategoria([]);
+          setErrorCategoria(
+            err?.response?.data?.message ||
+              err?.response?.data?.mensaje ||
+              err?.message ||
+              'No se pudieron buscar las categorías.'
+          );
+        }
+      } finally {
+        if (
+          solicitudActual ===
+          solicitudCategoriaRef.current
+        ) {
+          setBuscandoCategoria(false);
+        }
+      }
+    }, 350);
+
+    return () => clearTimeout(temporizador);
+  }, [busquedaCategoria, categoriaSeleccionada]);
+
+  const seleccionarCategoria = (categoria) => {
+    setCategoriaId(Number(categoria.id));
+    setCategoriaSeleccionada(categoria);
+    setBusquedaCategoria(categoria.nombre ?? '');
+    setResultadosCategoria([]);
+    setErrorCategoria('');
+    Keyboard.dismiss();
   };
 
-  const obtenerMensajeError = (err, mensajePredeterminado) => {
+  const limpiarCategoria = () => {
+    setCategoriaId(null);
+    setCategoriaSeleccionada(null);
+    setBusquedaCategoria('');
+    setResultadosCategoria([]);
+    setErrorCategoria('');
+  };
+
+  const normalizarDecimal = (valor) =>
+    valor.replace(',', '.').trim();
+
+  const obtenerMensajeError = (
+    err,
+    mensajePredeterminado
+  ) => {
     const data = err?.response?.data;
 
-    if (data?.errors && typeof data.errors === 'object') {
+    if (
+      data?.errors &&
+      typeof data.errors === 'object'
+    ) {
       const mensajes = Object.values(data.errors)
         .flat()
         .filter(Boolean);
@@ -141,17 +242,13 @@ export default function EditarServicioScreen({ route, navigation }) {
   const validarFormulario = () => {
     const tituloLimpio = titulo.trim();
     const descripcionLimpia = descripcion.trim();
-
-    const minimaTexto =
-      normalizarDecimal(tarifaMinima);
-
-    const maximaTexto =
-      normalizarDecimal(tarifaMaxima);
+    const minimaTexto = normalizarDecimal(tarifaMinima);
+    const maximaTexto = normalizarDecimal(tarifaMaxima);
 
     if (!categoriaId) {
       Alert.alert(
         'Categoría requerida',
-        'Selecciona una categoría para el servicio.'
+        'Busca y selecciona una categoría para el servicio.'
       );
       return false;
     }
@@ -238,29 +335,26 @@ export default function EditarServicioScreen({ route, navigation }) {
     setGuardando(true);
 
     try {
-      const minimaTexto =
-        normalizarDecimal(tarifaMinima);
-
       const maximaTexto =
         normalizarDecimal(tarifaMaxima);
-
-      const datos = {
-        categoriaId: Number(categoriaId),
-        titulo: titulo.trim(),
-        descripcion: descripcion.trim(),
-        tarifaMinima: Number(minimaTexto),
-        tarifaMaxima:
-          maximaTexto === ''
-            ? null
-            : Number(maximaTexto),
-        zonasCoberturaIds:
-          servicio?.zonasCoberturaIds ?? [],
-      };
 
       const actualizado =
         await servicioService.modificar(
           servicioId,
-          datos
+          {
+            categoriaId: Number(categoriaId),
+            titulo: titulo.trim(),
+            descripcion: descripcion.trim(),
+            tarifaMinima: Number(
+              normalizarDecimal(tarifaMinima)
+            ),
+            tarifaMaxima:
+              maximaTexto === ''
+                ? null
+                : Number(maximaTexto),
+            zonasCoberturaIds:
+              servicio?.zonasCoberturaIds ?? [],
+          }
         );
 
       setServicio(actualizado);
@@ -288,7 +382,9 @@ export default function EditarServicioScreen({ route, navigation }) {
     }
   };
 
-  const ejecutarCambioEstado = async (nuevoEstado) => {
+  const ejecutarCambioEstado = async (
+    nuevoEstado
+  ) => {
     if (
       cambiandoEstado ||
       nuevoEstado === estado
@@ -305,8 +401,13 @@ export default function EditarServicioScreen({ route, navigation }) {
           nuevoEstado
         );
 
-      setServicio(actualizado);
-      setEstado(actualizado.estado ?? nuevoEstado);
+      if (actualizado) {
+        setServicio(actualizado);
+      }
+
+      setEstado(
+        actualizado?.estado ?? nuevoEstado
+      );
 
       Alert.alert(
         'Estado actualizado',
@@ -325,7 +426,9 @@ export default function EditarServicioScreen({ route, navigation }) {
     }
   };
 
-  const solicitarCambioEstado = (nuevoEstado) => {
+  const solicitarCambioEstado = (
+    nuevoEstado
+  ) => {
     if (nuevoEstado === estado) {
       return;
     }
@@ -334,10 +437,7 @@ export default function EditarServicioScreen({ route, navigation }) {
       'Cambiar estado',
       `¿Deseas cambiar el estado del servicio a ${nuevoEstado}?`,
       [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
+        { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Cambiar',
           onPress: () =>
@@ -381,10 +481,7 @@ export default function EditarServicioScreen({ route, navigation }) {
       'Eliminar servicio',
       '¿Estás seguro de que deseas eliminar este servicio?',
       [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
+        { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Eliminar',
           style: 'destructive',
@@ -395,9 +492,7 @@ export default function EditarServicioScreen({ route, navigation }) {
   };
 
   const obtenerNombreEstado = (valor) => {
-    if (!valor) {
-      return 'Sin estado';
-    }
+    if (!valor) return 'Sin estado';
 
     return valor
       .toString()
@@ -413,7 +508,6 @@ export default function EditarServicioScreen({ route, navigation }) {
       <SafeAreaView style={styles.contenedor}>
         <View style={styles.centro}>
           <ActivityIndicator size="large" />
-
           <Text style={styles.textoCarga}>
             Cargando servicio...
           </Text>
@@ -436,11 +530,11 @@ export default function EditarServicioScreen({ route, navigation }) {
               color="#101828"
             />
           </Pressable>
-
-          <Text style={styles.tituloEncabezado}>
-            Editar servicio
-          </Text>
-
+          <View style={styles.encabezadoTexto}>
+            <Text style={styles.tituloEncabezado}>
+              Editar servicio
+            </Text>
+          </View>
           <View style={styles.espacioEncabezado} />
         </View>
 
@@ -450,15 +544,12 @@ export default function EditarServicioScreen({ route, navigation }) {
             size={48}
             color="#B42318"
           />
-
           <Text style={styles.errorTitulo}>
             No se pudo cargar el servicio
           </Text>
-
           <Text style={styles.errorTexto}>
             {error}
           </Text>
-
           <Pressable
             style={styles.botonReintentar}
             onPress={cargarDatos}
@@ -495,7 +586,6 @@ export default function EditarServicioScreen({ route, navigation }) {
           <Text style={styles.tituloEncabezado}>
             Editar servicio
           </Text>
-
           <Text style={styles.subtituloEncabezado}>
             Actualiza tu publicación
           </Text>
@@ -509,8 +599,7 @@ export default function EditarServicioScreen({ route, navigation }) {
         contentContainerStyle={[
           styles.contenido,
           alturaTeclado > 0 && {
-            paddingBottom:
-              alturaTeclado + 24,
+            paddingBottom: alturaTeclado + 24,
           },
         ]}
         keyboardShouldPersistTaps="always"
@@ -518,33 +607,19 @@ export default function EditarServicioScreen({ route, navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.seccion}>
-          <View style={styles.seccionCabecera}>
-            <View style={styles.seccionIcono}>
-              <Ionicons
-                name="radio-button-on-outline"
-                size={21}
-                color="#0D9488"
-              />
-            </View>
-
-            <View style={styles.seccionCabeceraTexto}>
-              <Text style={styles.seccionTitulo}>
-                Estado del servicio
-              </Text>
-
-              <Text style={styles.seccionSubtitulo}>
-                Estado actual:{' '}
-                {obtenerNombreEstado(estado)}
-              </Text>
-            </View>
-          </View>
+          <Text style={styles.seccionTitulo}>
+            Estado del servicio
+          </Text>
+          <Text style={styles.seccionSubtitulo}>
+            Estado actual: {obtenerNombreEstado(estado)}
+          </Text>
 
           <View style={styles.estados}>
             <Pressable
               style={[
                 styles.estadoBoton,
                 estado === 'ACTIVO' &&
-                  styles.estadoActivoSeleccionado,
+                  styles.estadoActivo,
               ]}
               onPress={() =>
                 solicitarCambioEstado('ACTIVO')
@@ -564,14 +639,7 @@ export default function EditarServicioScreen({ route, navigation }) {
                     : '#667085'
                 }
               />
-
-              <Text
-                style={[
-                  styles.estadoTexto,
-                  estado === 'ACTIVO' &&
-                    styles.estadoActivoTexto,
-                ]}
-              >
+              <Text style={styles.estadoTexto}>
                 Activo
               </Text>
             </Pressable>
@@ -580,7 +648,7 @@ export default function EditarServicioScreen({ route, navigation }) {
               style={[
                 styles.estadoBoton,
                 estado === 'INACTIVO' &&
-                  styles.estadoInactivoSeleccionado,
+                  styles.estadoInactivo,
               ]}
               onPress={() =>
                 solicitarCambioEstado('INACTIVO')
@@ -600,58 +668,33 @@ export default function EditarServicioScreen({ route, navigation }) {
                     : '#667085'
                 }
               />
-
-              <Text
-                style={[
-                  styles.estadoTexto,
-                  estado === 'INACTIVO' &&
-                    styles.estadoInactivoTexto,
-                ]}
-              >
+              <Text style={styles.estadoTexto}>
                 Inactivo
               </Text>
             </Pressable>
           </View>
 
-          {cambiandoEstado && (
-            <View style={styles.procesandoEstado}>
+          {cambiandoEstado ? (
+            <View style={styles.procesando}>
               <ActivityIndicator size="small" />
-
-              <Text style={styles.procesandoEstadoTexto}>
+              <Text style={styles.procesandoTexto}>
                 Actualizando estado...
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         <View style={styles.seccion}>
-          <View style={styles.seccionCabecera}>
-            <View style={styles.seccionIcono}>
-              <Ionicons
-                name="briefcase-outline"
-                size={21}
-                color="#2563EB"
-              />
-            </View>
-
-            <View style={styles.seccionCabeceraTexto}>
-              <Text style={styles.seccionTitulo}>
-                Información del servicio
-              </Text>
-
-              <Text style={styles.seccionSubtitulo}>
-                Modifica la información de tu publicación
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.etiqueta}>
-            Título{' '}
-            <Text style={styles.requerido}>
-              *
-            </Text>
+          <Text style={styles.seccionTitulo}>
+            Información del servicio
+          </Text>
+          <Text style={styles.seccionSubtitulo}>
+            Modifica la información de tu publicación
           </Text>
 
+          <Text style={styles.etiqueta}>
+            Título <Text style={styles.requerido}>*</Text>
+          </Text>
           <TextInput
             style={styles.input}
             value={titulo}
@@ -661,23 +704,16 @@ export default function EditarServicioScreen({ route, navigation }) {
             maxLength={150}
             editable={!guardando}
           />
-
           <Text style={styles.contador}>
             {titulo.length}/150
           </Text>
 
           <Text style={styles.etiqueta}>
             Descripción{' '}
-            <Text style={styles.requerido}>
-              *
-            </Text>
+            <Text style={styles.requerido}>*</Text>
           </Text>
-
           <TextInput
-            style={[
-              styles.input,
-              styles.textArea,
-            ]}
+            style={[styles.input, styles.textArea]}
             value={descripcion}
             onChangeText={setDescripcion}
             placeholder="Descripción del servicio"
@@ -687,158 +723,167 @@ export default function EditarServicioScreen({ route, navigation }) {
             maxLength={2000}
             editable={!guardando}
           />
-
           <Text style={styles.contador}>
             {descripcion.length}/2000
           </Text>
         </View>
 
         <View style={styles.seccion}>
-          <View style={styles.seccionCabecera}>
-            <View style={styles.seccionIcono}>
-              <Ionicons
-                name="pricetag-outline"
-                size={21}
-                color="#2563EB"
-              />
-            </View>
+          <Text style={styles.seccionTitulo}>
+            Categoría
+          </Text>
+          <Text style={styles.seccionSubtitulo}>
+            Escribe al menos 2 caracteres para cambiarla
+          </Text>
 
-            <View style={styles.seccionCabeceraTexto}>
-              <Text style={styles.seccionTitulo}>
-                Categoría
-              </Text>
-
-              <Text style={styles.seccionSubtitulo}>
-                Cambia la categoría del servicio
-              </Text>
-            </View>
+          <View
+            style={[
+              styles.buscador,
+              categoriaSeleccionada &&
+                styles.buscadorSeleccionado,
+            ]}
+          >
+            <Ionicons
+              name={
+                categoriaSeleccionada
+                  ? 'checkmark-circle'
+                  : 'search-outline'
+              }
+              size={20}
+              color={
+                categoriaSeleccionada
+                  ? '#0D9488'
+                  : '#667085'
+              }
+            />
+            <TextInput
+              style={styles.inputBusqueda}
+              value={busquedaCategoria}
+              onChangeText={(texto) => {
+                if (categoriaSeleccionada) {
+                  setCategoriaId(null);
+                  setCategoriaSeleccionada(null);
+                }
+                setBusquedaCategoria(texto);
+              }}
+              placeholder="Buscar categoría"
+              placeholderTextColor="#98A2B3"
+              editable={!guardando}
+              autoCorrect={false}
+            />
+            {busquedaCategoria ? (
+              <Pressable
+                onPress={limpiarCategoria}
+                disabled={guardando}
+              >
+                <Ionicons
+                  name="close-circle"
+                  size={20}
+                  color="#98A2B3"
+                />
+              </Pressable>
+            ) : null}
           </View>
 
-          {categorias.length === 0 ? (
-            <View style={styles.aviso}>
-              <Ionicons
-                name="information-circle-outline"
-                size={19}
-                color="#B54708"
-              />
-
-              <Text style={styles.avisoTexto}>
-                No hay categorías disponibles.
+          {categoriaSeleccionada ? (
+            <View style={styles.seleccionActual}>
+              <Text style={styles.seleccionActualEtiqueta}>
+                Categoría seleccionada
+              </Text>
+              <Text style={styles.seleccionActualTexto}>
+                {categoriaSeleccionada.nombre}
               </Text>
             </View>
-          ) : (
-            <View style={styles.categorias}>
-              {categorias.map((categoria) => {
-                const seleccionada =
-                  Number(categoriaId) ===
-                  Number(categoria.id);
+          ) : null}
 
-                return (
-                  <Pressable
-                    key={categoria.id}
-                    style={[
-                      styles.categoria,
-                      seleccionada &&
-                        styles.categoriaSeleccionada,
-                    ]}
-                    onPress={() =>
-                      setCategoriaId(
-                        categoria.id
-                      )
-                    }
-                    disabled={guardando}
-                  >
-                    <Ionicons
-                      name={
-                        seleccionada
-                          ? 'checkmark-circle'
-                          : 'ellipse-outline'
-                      }
-                      size={20}
-                      color={
-                        seleccionada
-                          ? '#2563EB'
-                          : '#98A2B3'
-                      }
-                    />
-
-                    <Text
-                      style={[
-                        styles.categoriaTexto,
-                        seleccionada &&
-                          styles.categoriaTextoSeleccionada,
-                      ]}
-                    >
-                      {categoria.nombre}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+          {buscandoCategoria ? (
+            <View style={styles.procesando}>
+              <ActivityIndicator size="small" />
+              <Text style={styles.procesandoTexto}>
+                Buscando categorías...
+              </Text>
             </View>
-          )}
+          ) : null}
+
+          {errorCategoria ? (
+            <Text style={styles.errorBusqueda}>
+              {errorCategoria}
+            </Text>
+          ) : null}
+
+          {!categoriaSeleccionada &&
+          busquedaCategoria.trim().length > 0 &&
+          busquedaCategoria.trim().length < 2 ? (
+            <Text style={styles.ayudaBusqueda}>
+              Escribe al menos 2 caracteres.
+            </Text>
+          ) : null}
+
+          {resultadosCategoria.length > 0 ? (
+            <View style={styles.resultados}>
+              {resultadosCategoria.map((categoria) => (
+                <Pressable
+                  key={categoria.id}
+                  style={styles.resultado}
+                  onPress={() =>
+                    seleccionarCategoria(categoria)
+                  }
+                >
+                  <Ionicons
+                    name="pricetag-outline"
+                    size={18}
+                    color="#2563EB"
+                  />
+                  <Text style={styles.resultadoTexto}>
+                    {categoria.nombre}
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color="#98A2B3"
+                  />
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.seccion}>
-          <View style={styles.seccionCabecera}>
-            <View style={styles.seccionIcono}>
-              <Ionicons
-                name="cash-outline"
-                size={21}
-                color="#2563EB"
-              />
-            </View>
-
-            <View style={styles.seccionCabeceraTexto}>
-              <Text style={styles.seccionTitulo}>
-                Tarifa
-              </Text>
-
-              <Text style={styles.seccionSubtitulo}>
-                Actualiza el rango de precio
-              </Text>
-            </View>
-          </View>
+          <Text style={styles.seccionTitulo}>
+            Tarifa
+          </Text>
+          <Text style={styles.seccionSubtitulo}>
+            Actualiza el rango de precio
+          </Text>
 
           <Text style={styles.etiqueta}>
             Tarifa mínima{' '}
-            <Text style={styles.requerido}>
-              *
-            </Text>
+            <Text style={styles.requerido}>*</Text>
           </Text>
-
           <View style={styles.inputDineroContenedor}>
-            <Text style={styles.simboloDinero}>
-              $
-            </Text>
-
+            <Text style={styles.simboloDinero}>$</Text>
             <TextInput
               style={styles.inputDinero}
               value={tarifaMinima}
               onChangeText={setTarifaMinima}
+              keyboardType="decimal-pad"
               placeholder="0.00"
               placeholderTextColor="#98A2B3"
-              keyboardType="decimal-pad"
-              editable={!guardando}
             />
           </View>
 
           <Text style={styles.etiqueta}>
             Tarifa máxima
           </Text>
-
           <View style={styles.inputDineroContenedor}>
-            <Text style={styles.simboloDinero}>
-              $
-            </Text>
-
+            <Text style={styles.simboloDinero}>$</Text>
             <TextInput
               style={styles.inputDinero}
               value={tarifaMaxima}
               onChangeText={setTarifaMaxima}
+              keyboardType="decimal-pad"
               placeholder="Opcional"
               placeholderTextColor="#98A2B3"
-              keyboardType="decimal-pad"
-              editable={!guardando}
             />
           </View>
         </View>
@@ -846,8 +891,7 @@ export default function EditarServicioScreen({ route, navigation }) {
         <Pressable
           style={[
             styles.botonGuardar,
-            guardando &&
-              styles.botonDeshabilitado,
+            guardando && styles.botonDeshabilitado,
           ]}
           onPress={guardarCambios}
           disabled={
@@ -857,114 +901,58 @@ export default function EditarServicioScreen({ route, navigation }) {
           }
         >
           {guardando ? (
-            <>
-              <ActivityIndicator
-                size="small"
-                color="#FFFFFF"
-              />
-
-              <Text style={styles.botonGuardarTexto}>
-                Guardando...
-              </Text>
-            </>
+            <ActivityIndicator
+              size="small"
+              color="#FFFFFF"
+            />
           ) : (
-            <>
-              <Ionicons
-                name="save-outline"
-                size={21}
-                color="#FFFFFF"
-              />
-
-              <Text style={styles.botonGuardarTexto}>
-                Guardar cambios
-              </Text>
-            </>
+            <Ionicons
+              name="save-outline"
+              size={21}
+              color="#FFFFFF"
+            />
           )}
+          <Text style={styles.botonGuardarTexto}>
+            {guardando
+              ? 'Guardando...'
+              : 'Guardar cambios'}
+          </Text>
         </Pressable>
 
-        <View style={styles.zonaPeligro}>
-          <View style={styles.zonaPeligroCabecera}>
-            <Ionicons
-              name="warning-outline"
-              size={22}
+        <Pressable
+          style={styles.botonEliminar}
+          onPress={confirmarEliminacion}
+          disabled={
+            guardando ||
+            cambiandoEstado ||
+            eliminando
+          }
+        >
+          {eliminando ? (
+            <ActivityIndicator
+              size="small"
               color="#B42318"
             />
-
-            <Text style={styles.zonaPeligroTitulo}>
-              Eliminar servicio
-            </Text>
-          </View>
-
-          <Text style={styles.zonaPeligroTexto}>
-            Al eliminar el servicio dejará de estar disponible en tu catálogo.
+          ) : (
+            <Ionicons
+              name="trash-outline"
+              size={20}
+              color="#B42318"
+            />
+          )}
+          <Text style={styles.botonEliminarTexto}>
+            {eliminando
+              ? 'Eliminando...'
+              : 'Eliminar servicio'}
           </Text>
-
-          <Pressable
-            style={[
-              styles.botonEliminar,
-              eliminando &&
-                styles.botonDeshabilitado,
-            ]}
-            onPress={confirmarEliminacion}
-            disabled={
-              eliminando ||
-              guardando ||
-              cambiandoEstado
-            }
-          >
-            {eliminando ? (
-              <>
-                <ActivityIndicator
-                  size="small"
-                  color="#B42318"
-                />
-
-                <Text style={styles.botonEliminarTexto}>
-                  Eliminando...
-                </Text>
-              </>
-            ) : (
-              <>
-                <Ionicons
-                  name="trash-outline"
-                  size={20}
-                  color="#B42318"
-                />
-
-                <Text style={styles.botonEliminarTexto}>
-                  Eliminar servicio
-                </Text>
-              </>
-            )}
-          </Pressable>
-        </View>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  scroll: {
-    flex: 1,
-  },
-  contenido: {
-    padding: 18,
-    paddingBottom: 45,
-  },
-  centro: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  textoCarga: {
-    marginTop: 12,
-    fontSize: 15,
-    color: '#667085',
-  },
+  contenedor: { flex: 1, backgroundColor: '#F8FAFC' },
   encabezado: {
     minHeight: 76,
     paddingHorizontal: 18,
@@ -982,10 +970,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  encabezadoTexto: {
-    flex: 1,
-    alignItems: 'center',
-  },
+  encabezadoTexto: { flex: 1, alignItems: 'center' },
   tituloEncabezado: {
     fontSize: 19,
     fontWeight: '700',
@@ -996,8 +981,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#667085',
   },
-  espacioEncabezado: {
-    width: 44,
+  espacioEncabezado: { width: 44 },
+  scroll: { flex: 1 },
+  contenido: { padding: 18, paddingBottom: 40 },
+  centro: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textoCarga: {
+    marginTop: 12,
+    color: '#667085',
   },
   seccion: {
     backgroundColor: '#FFFFFF',
@@ -1007,32 +1001,52 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 16,
   },
-  seccionCabecera: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  seccionIcono: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 11,
-  },
-  seccionCabeceraTexto: {
-    flex: 1,
-  },
   seccionTitulo: {
     fontSize: 17,
     fontWeight: '700',
     color: '#101828',
   },
   seccionSubtitulo: {
-    marginTop: 3,
+    marginTop: 4,
+    marginBottom: 18,
     fontSize: 12,
-    lineHeight: 17,
+    color: '#667085',
+  },
+  estados: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  estadoBoton: {
+    flex: 1,
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  estadoActivo: {
+    borderColor: '#6CE9A6',
+    backgroundColor: '#ECFDF3',
+  },
+  estadoInactivo: {
+    borderColor: '#FEC84B',
+    backgroundColor: '#FFFAEB',
+  },
+  estadoTexto: {
+    marginLeft: 7,
+    fontWeight: '600',
+    color: '#344054',
+  },
+  procesando: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  procesandoTexto: {
+    marginLeft: 8,
+    fontSize: 12,
     color: '#667085',
   },
   etiqueta: {
@@ -1041,15 +1055,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#344054',
   },
-  requerido: {
-    color: '#D92D20',
-  },
+  requerido: { color: '#D92D20' },
   input: {
     minHeight: 50,
     borderWidth: 1,
     borderColor: '#D0D5DD',
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 14,
     fontSize: 15,
     color: '#101828',
@@ -1066,206 +1077,152 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#98A2B3',
   },
-  categorias: {
-    gap: 9,
-  },
-  categoria: {
+  buscador: {
     minHeight: 50,
-    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#D0D5DD',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
+    borderRadius: 12,
+    paddingHorizontal: 13,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  categoriaSeleccionada: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+  buscadorSeleccionado: {
+    borderColor: '#5EEAD4',
+    backgroundColor: '#F0FDFA',
   },
-  categoriaTexto: {
+  inputBusqueda: {
     flex: 1,
-    marginLeft: 10,
+    marginHorizontal: 9,
     fontSize: 14,
-    fontWeight: '500',
-    color: '#344054',
+    color: '#101828',
   },
-  categoriaTextoSeleccionada: {
+  seleccionActual: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 11,
+    backgroundColor: '#F0FDFA',
+  },
+  seleccionActualEtiqueta: {
+    fontSize: 11,
+    color: '#667085',
+  },
+  seleccionActualTexto: {
+    marginTop: 3,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#1D4ED8',
+    color: '#0F766E',
+  },
+  errorBusqueda: {
+    marginTop: 10,
+    fontSize: 12,
+    color: '#B42318',
+  },
+  ayudaBusqueda: {
+    marginTop: 10,
+    fontSize: 12,
+    color: '#667085',
+  },
+  resultados: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  resultado: {
+    minHeight: 50,
+    paddingHorizontal: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAECF0',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  resultadoTexto: {
+    flex: 1,
+    marginHorizontal: 9,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#344054',
   },
   inputDineroContenedor: {
     minHeight: 50,
     borderWidth: 1,
     borderColor: '#D0D5DD',
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    marginBottom: 17,
+    marginBottom: 16,
   },
   simboloDinero: {
-    marginRight: 8,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#475467',
+    color: '#344054',
   },
   inputDinero: {
     flex: 1,
-    minHeight: 48,
+    marginLeft: 8,
     fontSize: 15,
     color: '#101828',
   },
-  estados: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  estadoBoton: {
-    flex: 1,
-    minHeight: 50,
-    borderWidth: 1,
-    borderColor: '#D0D5DD',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  estadoActivoSeleccionado: {
-    borderColor: '#12B76A',
-    backgroundColor: '#ECFDF3',
-  },
-  estadoInactivoSeleccionado: {
-    borderColor: '#F79009',
-    backgroundColor: '#FFFAEB',
-  },
-  estadoTexto: {
-    marginLeft: 7,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475467',
-  },
-  estadoActivoTexto: {
-    color: '#027A48',
-  },
-  estadoInactivoTexto: {
-    color: '#B54708',
-  },
-  procesandoEstado: {
-    marginTop: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  procesandoEstadoTexto: {
-    marginLeft: 8,
-    fontSize: 13,
-    color: '#667085',
-  },
-  aviso: {
-    borderRadius: 12,
-    backgroundColor: '#FFFAEB',
-    padding: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avisoTexto: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 13,
-    color: '#B54708',
-  },
   botonGuardar: {
-    minHeight: 54,
-    borderRadius: 14,
+    minHeight: 52,
+    borderRadius: 13,
     backgroundColor: '#2563EB',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
   },
   botonGuardarTexto: {
     marginLeft: 8,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  botonDeshabilitado: {
-    opacity: 0.6,
-  },
-  zonaPeligro: {
-    marginTop: 20,
-    backgroundColor: '#FFFFFF',
+  botonEliminar: {
+    minHeight: 50,
+    marginTop: 12,
     borderWidth: 1,
     borderColor: '#FECDCA',
-    borderRadius: 18,
-    padding: 18,
-  },
-  zonaPeligroCabecera: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  zonaPeligroTitulo: {
-    marginLeft: 8,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#B42318',
-  },
-  zonaPeligroTexto: {
-    marginTop: 9,
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#667085',
-  },
-  botonEliminar: {
-    minHeight: 48,
-    marginTop: 15,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FDA29B',
+    borderRadius: 13,
     backgroundColor: '#FEF3F2',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
   botonEliminarTexto: {
-    marginLeft: 7,
+    marginLeft: 8,
     fontSize: 14,
     fontWeight: '700',
     color: '#B42318',
   },
+  botonDeshabilitado: { opacity: 0.6 },
   errorContenedor: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 30,
+    padding: 25,
   },
   errorTitulo: {
-    marginTop: 15,
-    fontSize: 19,
+    marginTop: 12,
+    fontSize: 18,
     fontWeight: '700',
     color: '#101828',
-    textAlign: 'center',
   },
   errorTexto: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 20,
+    marginTop: 7,
     color: '#667085',
     textAlign: 'center',
   },
   botonReintentar: {
-    marginTop: 20,
-    borderRadius: 11,
+    marginTop: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 10,
     backgroundColor: '#2563EB',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
   },
   botonReintentarTexto: {
-    fontSize: 14,
-    fontWeight: '700',
     color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

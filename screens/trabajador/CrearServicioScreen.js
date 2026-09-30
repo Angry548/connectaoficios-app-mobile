@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,29 +15,36 @@ import { Ionicons } from '@expo/vector-icons';
 import { servicioService } from '../../services/servicioService';
 
 export default function CrearServicioScreen({ navigation }) {
-  const [categorias, setCategorias] = useState([]);
   const [categoriaId, setCategoriaId] = useState(null);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] =
+    useState(null);
+  const [busquedaCategoria, setBusquedaCategoria] = useState('');
+  const [resultadosCategoria, setResultadosCategoria] =
+    useState([]);
+  const [buscandoCategoria, setBuscandoCategoria] = useState(false);
+  const [errorCategoria, setErrorCategoria] = useState('');
   const [titulo, setTitulo] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [tarifaMinima, setTarifaMinima] = useState('');
   const [tarifaMaxima, setTarifaMaxima] = useState('');
-  const [cargandoCategorias, setCargandoCategorias] = useState(true);
   const [guardando, setGuardando] = useState(false);
-  const [errorCategorias, setErrorCategorias] = useState('');
   const [alturaTeclado, setAlturaTeclado] = useState(0);
+  const solicitudCategoriaRef = useRef(0);
 
   useEffect(() => {
-    cargarCategorias();
-  }, []);
+    const mostrar = Keyboard.addListener(
+      'keyboardDidShow',
+      (evento) => {
+        setAlturaTeclado(evento.endCoordinates.height);
+      }
+    );
 
-  useEffect(() => {
-    const mostrar = Keyboard.addListener('keyboardDidShow', (evento) => {
-      setAlturaTeclado(evento.endCoordinates.height);
-    });
-
-    const ocultar = Keyboard.addListener('keyboardDidHide', () => {
-      setAlturaTeclado(0);
-    });
+    const ocultar = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setAlturaTeclado(0);
+      }
+    );
 
     return () => {
       mostrar.remove();
@@ -45,29 +52,87 @@ export default function CrearServicioScreen({ navigation }) {
     };
   }, []);
 
-  const cargarCategorias = async () => {
-    setCargandoCategorias(true);
-    setErrorCategorias('');
+  useEffect(() => {
+    const texto = busquedaCategoria.trim();
 
-    try {
-      const data = await servicioService.listarCategorias();
-      setCategorias(data);
-    } catch (error) {
-      const mensaje =
-        error?.response?.data?.message ||
-        error?.response?.data?.mensaje ||
-        error?.message ||
-        'No se pudieron cargar las categorías.';
-
-      setErrorCategorias(mensaje);
-    } finally {
-      setCargandoCategorias(false);
+    if (categoriaSeleccionada) {
+      setResultadosCategoria([]);
+      setBuscandoCategoria(false);
+      setErrorCategoria('');
+      return;
     }
+
+    if (texto.length < 2) {
+      setResultadosCategoria([]);
+      setBuscandoCategoria(false);
+      setErrorCategoria('');
+      return;
+    }
+
+    const solicitudActual = ++solicitudCategoriaRef.current;
+
+    const temporizador = setTimeout(async () => {
+      setBuscandoCategoria(true);
+      setErrorCategoria('');
+
+      try {
+        const data =
+          await servicioService.buscarCategorias(
+            texto,
+            10
+          );
+
+        if (
+          solicitudActual ===
+          solicitudCategoriaRef.current
+        ) {
+          setResultadosCategoria(data);
+        }
+      } catch (error) {
+        if (
+          solicitudActual ===
+          solicitudCategoriaRef.current
+        ) {
+          setResultadosCategoria([]);
+          setErrorCategoria(
+            error?.response?.data?.message ||
+              error?.response?.data?.mensaje ||
+              error?.message ||
+              'No se pudieron buscar las categorías.'
+          );
+        }
+      } finally {
+        if (
+          solicitudActual ===
+          solicitudCategoriaRef.current
+        ) {
+          setBuscandoCategoria(false);
+        }
+      }
+    }, 350);
+
+    return () => clearTimeout(temporizador);
+  }, [busquedaCategoria, categoriaSeleccionada]);
+
+  const seleccionarCategoria = (categoria) => {
+    setCategoriaId(Number(categoria.id));
+    setCategoriaSeleccionada(categoria);
+    setBusquedaCategoria(categoria.nombre ?? '');
+    setResultadosCategoria([]);
+    setErrorCategoria('');
+    Keyboard.dismiss();
   };
 
-  const normalizarDecimal = (valor) => {
-    return valor.replace(',', '.').trim();
+  const limpiarCategoria = () => {
+    setCategoriaId(null);
+    setCategoriaSeleccionada(null);
+    setBusquedaCategoria('');
+    setResultadosCategoria([]);
+    setErrorCategoria('');
   };
+
+  const normalizarDecimal = (valor) =>
+    valor.replace(',', '.').trim();
 
   const validarFormulario = () => {
     const tituloLimpio = titulo.trim();
@@ -78,7 +143,7 @@ export default function CrearServicioScreen({ navigation }) {
     if (!categoriaId) {
       Alert.alert(
         'Categoría requerida',
-        'Selecciona una categoría para el servicio.'
+        'Busca y selecciona una categoría para el servicio.'
       );
       return false;
     }
@@ -185,14 +250,16 @@ export default function CrearServicioScreen({ navigation }) {
       );
     } catch (error) {
       const data = error?.response?.data;
-
       let mensaje =
         data?.message ||
         data?.mensaje ||
         error?.message ||
         'No se pudo crear el servicio. Intenta nuevamente.';
 
-      if (data?.errors && typeof data.errors === 'object') {
+      if (
+        data?.errors &&
+        typeof data.errors === 'object'
+      ) {
         const mensajes = Object.values(data.errors)
           .flat()
           .filter(Boolean);
@@ -202,7 +269,10 @@ export default function CrearServicioScreen({ navigation }) {
         }
       }
 
-      Alert.alert('No se pudo crear el servicio', mensaje);
+      Alert.alert(
+        'No se pudo crear el servicio',
+        mensaje
+      );
     } finally {
       setGuardando(false);
     }
@@ -227,7 +297,6 @@ export default function CrearServicioScreen({ navigation }) {
           <Text style={styles.tituloPantalla}>
             Crear servicio
           </Text>
-
           <Text style={styles.subtituloPantalla}>
             Publica un nuevo servicio
           </Text>
@@ -257,12 +326,10 @@ export default function CrearServicioScreen({ navigation }) {
                 color="#2563EB"
               />
             </View>
-
             <View style={styles.seccionTituloTexto}>
               <Text style={styles.seccionTitulo}>
                 Información del servicio
               </Text>
-
               <Text style={styles.seccionSubtitulo}>
                 Describe el trabajo que deseas ofrecer
               </Text>
@@ -272,7 +339,6 @@ export default function CrearServicioScreen({ navigation }) {
           <Text style={styles.etiqueta}>
             Título <Text style={styles.requerido}>*</Text>
           </Text>
-
           <TextInput
             style={styles.input}
             value={titulo}
@@ -282,7 +348,6 @@ export default function CrearServicioScreen({ navigation }) {
             maxLength={150}
             editable={!guardando}
           />
-
           <Text style={styles.contador}>
             {titulo.length}/150
           </Text>
@@ -290,7 +355,6 @@ export default function CrearServicioScreen({ navigation }) {
           <Text style={styles.etiqueta}>
             Descripción <Text style={styles.requerido}>*</Text>
           </Text>
-
           <TextInput
             style={[styles.input, styles.textArea]}
             value={descripcion}
@@ -302,7 +366,6 @@ export default function CrearServicioScreen({ navigation }) {
             maxLength={2000}
             editable={!guardando}
           />
-
           <Text style={styles.contador}>
             {descripcion.length}/2000
           </Text>
@@ -317,90 +380,144 @@ export default function CrearServicioScreen({ navigation }) {
                 color="#2563EB"
               />
             </View>
-
             <View style={styles.seccionTituloTexto}>
               <Text style={styles.seccionTitulo}>
                 Categoría
               </Text>
-
               <Text style={styles.seccionSubtitulo}>
-                Selecciona la categoría que mejor describe tu servicio
+                Escribe al menos 2 caracteres para buscar
               </Text>
             </View>
           </View>
 
-          {cargandoCategorias ? (
-            <View style={styles.cargandoCategorias}>
-              <ActivityIndicator size="small" />
-              <Text style={styles.cargandoCategoriasTexto}>
-                Cargando categorías...
-              </Text>
-            </View>
-          ) : errorCategorias ? (
-            <View style={styles.errorCategorias}>
-              <Text style={styles.errorCategoriasTexto}>
-                {errorCategorias}
-              </Text>
+          <Text style={styles.etiqueta}>
+            Buscar categoría{' '}
+            <Text style={styles.requerido}>*</Text>
+          </Text>
 
+          <View
+            style={[
+              styles.buscador,
+              categoriaSeleccionada &&
+                styles.buscadorSeleccionado,
+            ]}
+          >
+            <Ionicons
+              name={
+                categoriaSeleccionada
+                  ? 'checkmark-circle'
+                  : 'search-outline'
+              }
+              size={20}
+              color={
+                categoriaSeleccionada
+                  ? '#0D9488'
+                  : '#667085'
+              }
+            />
+
+            <TextInput
+              style={styles.inputBusqueda}
+              value={busquedaCategoria}
+              onChangeText={(texto) => {
+                if (categoriaSeleccionada) {
+                  setCategoriaId(null);
+                  setCategoriaSeleccionada(null);
+                }
+                setBusquedaCategoria(texto);
+              }}
+              placeholder="Ej. electricidad"
+              placeholderTextColor="#98A2B3"
+              editable={!guardando}
+              autoCorrect={false}
+            />
+
+            {busquedaCategoria ? (
               <Pressable
-                style={styles.reintentarCategorias}
-                onPress={cargarCategorias}
+                onPress={limpiarCategoria}
+                disabled={guardando}
               >
-                <Text style={styles.reintentarCategoriasTexto}>
-                  Reintentar
-                </Text>
+                <Ionicons
+                  name="close-circle"
+                  size={20}
+                  color="#98A2B3"
+                />
               </Pressable>
-            </View>
-          ) : categorias.length === 0 ? (
-            <View style={styles.errorCategorias}>
-              <Text style={styles.errorCategoriasTexto}>
-                No hay categorías disponibles.
+            ) : null}
+          </View>
+
+          {categoriaSeleccionada ? (
+            <View style={styles.seleccionActual}>
+              <Text style={styles.seleccionActualEtiqueta}>
+                Categoría seleccionada
+              </Text>
+              <Text style={styles.seleccionActualTexto}>
+                {categoriaSeleccionada.nombre}
               </Text>
             </View>
-          ) : (
-            <View style={styles.categorias}>
-              {categorias.map((categoria) => {
-                const seleccionada =
-                  Number(categoriaId) === Number(categoria.id);
+          ) : null}
 
-                return (
-                  <Pressable
-                    key={categoria.id}
-                    style={[
-                      styles.categoria,
-                      seleccionada && styles.categoriaSeleccionada,
-                    ]}
-                    onPress={() => setCategoriaId(categoria.id)}
-                    disabled={guardando}
-                  >
-                    <Ionicons
-                      name={
-                        seleccionada
-                          ? 'checkmark-circle'
-                          : 'ellipse-outline'
-                      }
-                      size={20}
-                      color={
-                        seleccionada
-                          ? '#2563EB'
-                          : '#98A2B3'
-                      }
-                    />
-
-                    <Text
-                      style={[
-                        styles.categoriaTexto,
-                        seleccionada &&
-                          styles.categoriaTextoSeleccionada,
-                      ]}
-                    >
-                      {categoria.nombre}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+          {buscandoCategoria ? (
+            <View style={styles.estadoBusqueda}>
+              <ActivityIndicator size="small" />
+              <Text style={styles.estadoBusquedaTexto}>
+                Buscando categorías...
+              </Text>
             </View>
-          )}
+          ) : null}
+
+          {errorCategoria ? (
+            <Text style={styles.errorBusqueda}>
+              {errorCategoria}
+            </Text>
+          ) : null}
+
+          {!categoriaSeleccionada &&
+          busquedaCategoria.trim().length > 0 &&
+          busquedaCategoria.trim().length < 2 ? (
+            <Text style={styles.ayudaBusqueda}>
+              Escribe al menos 2 caracteres.
+            </Text>
+          ) : null}
+
+          {!categoriaSeleccionada &&
+          !buscandoCategoria &&
+          busquedaCategoria.trim().length >= 2 &&
+          resultadosCategoria.length === 0 &&
+          !errorCategoria ? (
+            <Text style={styles.ayudaBusqueda}>
+              No se encontraron coincidencias.
+            </Text>
+          ) : null}
+
+          {resultadosCategoria.length > 0 ? (
+            <View style={styles.resultados}>
+              {resultadosCategoria.map((categoria) => (
+                <Pressable
+                  key={categoria.id}
+                  style={styles.resultado}
+                  onPress={() =>
+                    seleccionarCategoria(categoria)
+                  }
+                  disabled={guardando}
+                >
+                  <Ionicons
+                    name="pricetag-outline"
+                    size={18}
+                    color="#2563EB"
+                  />
+                  <Text style={styles.resultadoTexto}>
+                    {categoria.nombre}
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color="#98A2B3"
+                  />
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.seccion}>
@@ -412,12 +529,10 @@ export default function CrearServicioScreen({ navigation }) {
                 color="#2563EB"
               />
             </View>
-
             <View style={styles.seccionTituloTexto}>
               <Text style={styles.seccionTitulo}>
                 Tarifa
               </Text>
-
               <Text style={styles.seccionSubtitulo}>
                 Define el rango de precio de tu servicio
               </Text>
@@ -425,12 +540,11 @@ export default function CrearServicioScreen({ navigation }) {
           </View>
 
           <Text style={styles.etiqueta}>
-            Tarifa mínima <Text style={styles.requerido}>*</Text>
+            Tarifa mínima{' '}
+            <Text style={styles.requerido}>*</Text>
           </Text>
-
           <View style={styles.inputDineroContenedor}>
             <Text style={styles.simboloDinero}>$</Text>
-
             <TextInput
               style={styles.inputDinero}
               value={tarifaMinima}
@@ -445,10 +559,8 @@ export default function CrearServicioScreen({ navigation }) {
           <Text style={styles.etiqueta}>
             Tarifa máxima
           </Text>
-
           <View style={styles.inputDineroContenedor}>
             <Text style={styles.simboloDinero}>$</Text>
-
             <TextInput
               style={styles.inputDinero}
               value={tarifaMaxima}
@@ -466,10 +578,8 @@ export default function CrearServicioScreen({ navigation }) {
               size={18}
               color="#2563EB"
             />
-
             <Text style={styles.informacionTarifaTexto}>
-              La tarifa máxima es opcional. Puedes indicar solamente el
-              precio mínimo desde el cual ofreces tu servicio.
+              La tarifa máxima es opcional. Puedes indicar solamente el precio mínimo desde el cual ofreces tu servicio.
             </Text>
           </View>
         </View>
@@ -483,27 +593,22 @@ export default function CrearServicioScreen({ navigation }) {
           disabled={guardando}
         >
           {guardando ? (
-            <>
-              <ActivityIndicator
-                size="small"
-                color="#FFFFFF"
-              />
-              <Text style={styles.botonGuardarTexto}>
-                Publicando...
-              </Text>
-            </>
+            <ActivityIndicator
+              size="small"
+              color="#FFFFFF"
+            />
           ) : (
-            <>
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={21}
-                color="#FFFFFF"
-              />
-              <Text style={styles.botonGuardarTexto}>
-                Publicar servicio
-              </Text>
-            </>
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={21}
+              color="#FFFFFF"
+            />
           )}
+          <Text style={styles.botonGuardarTexto}>
+            {guardando
+              ? 'Publicando...'
+              : 'Publicar servicio'}
+          </Text>
         </Pressable>
 
         <Text style={styles.camposObligatorios}>
@@ -515,10 +620,7 @@ export default function CrearServicioScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
+  contenedor: { flex: 1, backgroundColor: '#F8FAFC' },
   encabezado: {
     minHeight: 76,
     paddingHorizontal: 18,
@@ -536,10 +638,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  encabezadoTexto: {
-    flex: 1,
-    alignItems: 'center',
-  },
+  encabezadoTexto: { flex: 1, alignItems: 'center' },
   tituloPantalla: {
     fontSize: 19,
     fontWeight: '700',
@@ -550,16 +649,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#667085',
   },
-  espacioEncabezado: {
-    width: 44,
-  },
-  scroll: {
-    flex: 1,
-  },
-  contenido: {
-    padding: 18,
-    paddingBottom: 40,
-  },
+  espacioEncabezado: { width: 44 },
+  scroll: { flex: 1 },
+  contenido: { padding: 18, paddingBottom: 40 },
   seccion: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
@@ -582,9 +674,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 11,
   },
-  seccionTituloTexto: {
-    flex: 1,
-  },
+  seccionTituloTexto: { flex: 1 },
   seccionTitulo: {
     fontSize: 17,
     fontWeight: '700',
@@ -602,9 +692,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#344054',
   },
-  requerido: {
-    color: '#D92D20',
-  },
+  requerido: { color: '#D92D20' },
   input: {
     minHeight: 50,
     borderWidth: 1,
@@ -627,124 +715,136 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#98A2B3',
   },
-  cargandoCategorias: {
-    minHeight: 70,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cargandoCategoriasTexto: {
-    marginLeft: 9,
-    fontSize: 14,
-    color: '#667085',
-  },
-  categorias: {
-    gap: 9,
-  },
-  categoria: {
+  buscador: {
     minHeight: 50,
-    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#D0D5DD',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
+    borderRadius: 12,
+    paddingHorizontal: 13,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  categoriaSeleccionada: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+  buscadorSeleccionado: {
+    borderColor: '#5EEAD4',
+    backgroundColor: '#F0FDFA',
   },
-  categoriaTexto: {
+  inputBusqueda: {
     flex: 1,
-    marginLeft: 10,
+    marginHorizontal: 9,
     fontSize: 14,
-    fontWeight: '500',
-    color: '#344054',
+    color: '#101828',
   },
-  categoriaTextoSeleccionada: {
-    fontWeight: '700',
-    color: '#1D4ED8',
-  },
-  errorCategorias: {
-    borderRadius: 12,
-    backgroundColor: '#FEF3F2',
-    padding: 14,
-  },
-  errorCategoriasTexto: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#B42318',
-  },
-  reintentarCategorias: {
+  seleccionActual: {
     marginTop: 10,
-    alignSelf: 'flex-start',
+    padding: 12,
+    borderRadius: 11,
+    backgroundColor: '#F0FDFA',
   },
-  reintentarCategoriasTexto: {
-    fontSize: 13,
+  seleccionActualEtiqueta: {
+    fontSize: 11,
+    color: '#667085',
+  },
+  seleccionActualTexto: {
+    marginTop: 3,
+    fontSize: 14,
     fontWeight: '700',
+    color: '#0F766E',
+  },
+  estadoBusqueda: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  estadoBusquedaTexto: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#667085',
+  },
+  errorBusqueda: {
+    marginTop: 10,
+    fontSize: 12,
     color: '#B42318',
+  },
+  ayudaBusqueda: {
+    marginTop: 10,
+    fontSize: 12,
+    color: '#667085',
+  },
+  resultados: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  resultado: {
+    minHeight: 50,
+    paddingHorizontal: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAECF0',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  resultadoTexto: {
+    flex: 1,
+    marginHorizontal: 9,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#344054',
   },
   inputDineroContenedor: {
     minHeight: 50,
     borderWidth: 1,
     borderColor: '#D0D5DD',
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    marginBottom: 17,
+    marginBottom: 16,
   },
   simboloDinero: {
-    marginRight: 8,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#475467',
+    color: '#344054',
   },
   inputDinero: {
     flex: 1,
-    minHeight: 48,
+    marginLeft: 8,
     fontSize: 15,
     color: '#101828',
   },
   informacionTarifa: {
-    marginTop: 2,
-    borderRadius: 10,
-    backgroundColor: '#EFF6FF',
-    padding: 12,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
   },
   informacionTarifaTexto: {
     flex: 1,
     marginLeft: 8,
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 17,
     color: '#475467',
   },
   botonGuardar: {
-    minHeight: 54,
-    borderRadius: 14,
+    minHeight: 52,
+    borderRadius: 13,
     backgroundColor: '#2563EB',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  botonDeshabilitado: {
-    opacity: 0.65,
   },
   botonGuardarTexto: {
     marginLeft: 8,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
   },
+  botonDeshabilitado: { opacity: 0.6 },
   camposObligatorios: {
     marginTop: 12,
-    fontSize: 12,
-    color: '#98A2B3',
     textAlign: 'center',
+    fontSize: 11,
+    color: '#98A2B3',
   },
 });

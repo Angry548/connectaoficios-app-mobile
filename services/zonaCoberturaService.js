@@ -3,13 +3,8 @@ import { servicioService } from './servicioService';
 
 export const zonaCoberturaService = {
   listarActivas: async () => {
-    const response = await apiJava.get(
-      '/api/zonas-cobertura'
-    );
-
-    return Array.isArray(response.data)
-      ? response.data
-      : [];
+    const response = await apiJava.get('/api/zonas-cobertura');
+    return Array.isArray(response.data) ? response.data : [];
   },
 
   obtenerPorId: async (id) => {
@@ -26,10 +21,10 @@ export const zonaCoberturaService = {
     return response.data;
   },
 
-  buscar: async (texto, limit = 20) => {
+  buscar: async (texto, limit = 10) => {
     const textoLimpio = texto?.trim();
 
-    if (!textoLimpio) {
+    if (!textoLimpio || textoLimpio.length < 2) {
       return [];
     }
 
@@ -38,7 +33,10 @@ export const zonaCoberturaService = {
       {
         params: {
           texto: textoLimpio,
-          limit,
+          limit: Math.min(
+            Math.max(Number(limit) || 10, 1),
+            10
+          ),
         },
       }
     );
@@ -87,6 +85,31 @@ export const zonaCoberturaService = {
     return Array.isArray(servicio?.zonasCoberturaIds)
       ? servicio.zonasCoberturaIds.map(Number)
       : [];
+  },
+
+  obtenerDetalleZonasPorIds: async (ids = []) => {
+    const unicos = Array.from(
+      new Set(
+        ids
+          .map(Number)
+          .filter(
+            (id) =>
+              Number.isInteger(id) && id > 0
+          )
+      )
+    );
+
+    if (unicos.length === 0) {
+      return [];
+    }
+
+    const resultados = await Promise.all(
+      unicos.map((id) =>
+        zonaCoberturaService.obtenerPorId(id)
+      )
+    );
+
+    return resultados.filter(Boolean);
   },
 
   guardarZonasDelServicio: async (

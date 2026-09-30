@@ -19,45 +19,57 @@ import { servicioService } from '../../services/servicioService';
 export default function MisServiciosScreen({
   navigation,
 }) {
-  const [servicios, setServicios] =
-    useState([]);
-  const [cargando, setCargando] =
-    useState(true);
-  const [actualizando, setActualizando] =
-    useState(false);
-  const [error, setError] =
-    useState('');
+  const [servicios, setServicios] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [actualizando, setActualizando] = useState(false);
+  const [error, setError] = useState('');
 
-  const cargarServicios =
-    useCallback(
-      async (mostrarCarga = true) => {
-        if (mostrarCarga) {
-          setCargando(true);
-        }
+  const cargarServicios = useCallback(
+    async (mostrarCarga = true) => {
+      if (mostrarCarga) {
+        setCargando(true);
+      }
 
-        setError('');
+      setError('');
 
-        try {
-          const data =
-            await servicioService.listarMisServicios();
+      try {
+        const [
+          serviciosObtenidos,
+          categoriasObtenidas,
+        ] = await Promise.all([
+          servicioService.listarMisServicios(),
+          servicioService.listarCategorias(),
+        ]);
 
-          setServicios(data);
-        } catch (err) {
-          const mensaje =
-            err?.response?.data?.message ||
-            err?.response?.data?.mensaje ||
-            err?.message ||
-            'No se pudieron cargar los servicios.';
+        setServicios(
+          Array.isArray(serviciosObtenidos)
+            ? serviciosObtenidos
+            : []
+        );
 
-          setError(mensaje);
-          setServicios([]);
-        } finally {
-          setCargando(false);
-          setActualizando(false);
-        }
-      },
-      []
-    );
+        setCategorias(
+          Array.isArray(categoriasObtenidas)
+            ? categoriasObtenidas
+            : []
+        );
+      } catch (err) {
+        const mensaje =
+          err?.response?.data?.message ||
+          err?.response?.data?.mensaje ||
+          err?.message ||
+          'No se pudieron cargar los servicios.';
+
+        setError(mensaje);
+        setServicios([]);
+        setCategorias([]);
+      } finally {
+        setCargando(false);
+        setActualizando(false);
+      }
+    },
+    []
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -81,9 +93,20 @@ export default function MisServiciosScreen({
       .toLowerCase()
       .replace(
         /\b\w/g,
-        (letra) =>
-          letra.toUpperCase()
+        (letra) => letra.toUpperCase()
       );
+  };
+
+  const obtenerNombreCategoria = (
+    categoriaId
+  ) => {
+    const categoria = categorias.find(
+      (item) =>
+        Number(item.id) ===
+        Number(categoriaId)
+    );
+
+    return categoria?.nombre ?? 'Sin categoría';
   };
 
   const obtenerTarifa = (servicio) => {
@@ -337,19 +360,30 @@ export default function MisServiciosScreen({
                     </Text>
                   </View>
 
-                  <Text
+                  <View
                     style={
-                      styles.categoriaTexto
+                      styles.categoriaContenedor
                     }
                   >
-                    Categoría{' '}
-                    {servicio.categoriaId}
-                  </Text>
+                    <Ionicons
+                      name="pricetag-outline"
+                      size={15}
+                      color="#667085"
+                    />
+
+                    <Text
+                      style={
+                        styles.categoriaTexto
+                      }
+                    >
+                      {obtenerNombreCategoria(
+                        servicio.categoriaId
+                      )}
+                    </Text>
+                  </View>
                 </View>
 
-                <View
-                  style={styles.acciones}
-                >
+                <View style={styles.acciones}>
                   <Pressable
                     style={
                       styles.botonAccion
@@ -606,9 +640,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#101828',
   },
+  categoriaContenedor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    maxWidth: '48%',
+  },
   categoriaTexto: {
+    marginLeft: 5,
     fontSize: 12,
+    fontWeight: '600',
     color: '#667085',
+    textAlign: 'right',
   },
   acciones: {
     flexDirection: 'row',
