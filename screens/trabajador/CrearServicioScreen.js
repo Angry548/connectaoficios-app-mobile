@@ -98,7 +98,7 @@ export default function CrearServicioScreen({ navigation }) {
             error?.response?.data?.message ||
               error?.response?.data?.mensaje ||
               error?.message ||
-              'No se pudieron buscar las categorías.'
+              'no se pudieron buscar las categorías.'
           );
         }
       } finally {
