@@ -238,6 +238,26 @@ export default function MisServiciosScreen({ navigation }) {
                     </Text>
                   </View>
                 </View>
+
+<Pressable
+  style={styles.botonEditar}
+  onPress={() =>
+    navigation.navigate('EditarServicio', {
+      servicioId: servicio.id,
+    })
+  }
+>
+  <Ionicons
+    name="create-outline"
+    size={19}
+    color="#2563EB"
+  />
+
+  <Text style={styles.botonEditarTexto}>
+    Editar servicio
+  </Text>
+</Pressable>
+
               </View>
             ))}
 
@@ -491,4 +511,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+  botonEditar: {
+  minHeight: 45,
+  marginTop: 16,
+  borderRadius: 11,
+  borderWidth: 1,
+  borderColor: '#BFDBFE',
+  backgroundColor: '#EFF6FF',
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+botonEditarTexto: {
+  marginLeft: 7,
+  fontSize: 14,
+  fontWeight: '700',
+  color: '#2563EB',
+},
 });
