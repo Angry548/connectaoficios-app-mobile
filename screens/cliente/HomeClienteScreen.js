@@ -92,6 +92,9 @@ export default function HomeClienteScreen({ navigation }) {
           <View style={styles.grid}>
             <TouchableOpacity
               style={styles.tarjeta}
+              onPress={() =>
+                navigation.navigate('BuscarServicios')
+              }
               activeOpacity={0.8}
             >
               <View style={styles.icono}>
