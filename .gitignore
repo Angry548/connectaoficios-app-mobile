@@ -30,3 +30,10 @@ yarn-error.*
 
 /ios
 /android
+
+# Documentacion y configuracion local de trabajo
+saul/
+opencode.json
+.opencode/
+AGENTS.md
+.agents/
