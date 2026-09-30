@@ -1,7 +1,9 @@
-import React, { useCallback, useState } from 'react';
+import React, {
+  useCallback,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -14,36 +16,48 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { servicioService } from '../../services/servicioService';
 
-export default function MisServiciosScreen({ navigation }) {
-  const [servicios, setServicios] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [actualizando, setActualizando] = useState(false);
-  const [error, setError] = useState('');
+export default function MisServiciosScreen({
+  navigation,
+}) {
+  const [servicios, setServicios] =
+    useState([]);
+  const [cargando, setCargando] =
+    useState(true);
+  const [actualizando, setActualizando] =
+    useState(false);
+  const [error, setError] =
+    useState('');
 
-  const cargarServicios = useCallback(async (mostrarCarga = true) => {
-    if (mostrarCarga) {
-      setCargando(true);
-    }
+  const cargarServicios =
+    useCallback(
+      async (mostrarCarga = true) => {
+        if (mostrarCarga) {
+          setCargando(true);
+        }
 
-    setError('');
+        setError('');
 
-    try {
-      const data = await servicioService.listarMisServicios();
-      setServicios(data);
-    } catch (err) {
-      const mensaje =
-        err?.response?.data?.message ||
-        err?.response?.data?.mensaje ||
-        err?.message ||
-        'No se pudieron cargar los servicios.';
+        try {
+          const data =
+            await servicioService.listarMisServicios();
 
-      setError(mensaje);
-      setServicios([]);
-    } finally {
-      setCargando(false);
-      setActualizando(false);
-    }
-  }, []);
+          setServicios(data);
+        } catch (err) {
+          const mensaje =
+            err?.response?.data?.message ||
+            err?.response?.data?.mensaje ||
+            err?.message ||
+            'No se pudieron cargar los servicios.';
+
+          setError(mensaje);
+          setServicios([]);
+        } finally {
+          setCargando(false);
+          setActualizando(false);
+        }
+      },
+      []
+    );
 
   useFocusEffect(
     useCallback(() => {
@@ -65,19 +79,31 @@ export default function MisServiciosScreen({ navigation }) {
       .toString()
       .replaceAll('_', ' ')
       .toLowerCase()
-      .replace(/\b\w/g, (letra) => letra.toUpperCase());
+      .replace(
+        /\b\w/g,
+        (letra) =>
+          letra.toUpperCase()
+      );
   };
 
   const obtenerTarifa = (servicio) => {
-    const minima = Number(servicio.tarifaMinima);
+    const minima = Number(
+      servicio.tarifaMinima
+    );
+
     const maxima =
       servicio.tarifaMaxima !== null &&
       servicio.tarifaMaxima !== undefined
         ? Number(servicio.tarifaMaxima)
         : null;
 
-    if (maxima !== null && !Number.isNaN(maxima)) {
-      return `$${minima.toFixed(2)} - $${maxima.toFixed(2)}`;
+    if (
+      maxima !== null &&
+      !Number.isNaN(maxima)
+    ) {
+      return `$${minima.toFixed(
+        2
+      )} - $${maxima.toFixed(2)}`;
     }
 
     return `Desde $${minima.toFixed(2)}`;
@@ -88,7 +114,10 @@ export default function MisServiciosScreen({ navigation }) {
       <SafeAreaView style={styles.contenedor}>
         <View style={styles.centro}>
           <ActivityIndicator size="large" />
-          <Text style={styles.textoCarga}>Cargando servicios...</Text>
+
+          <Text style={styles.textoCarga}>
+            Cargando servicios...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -97,18 +126,42 @@ export default function MisServiciosScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.contenedor}>
       <View style={styles.encabezado}>
-        <View>
-          <Text style={styles.titulo}>Mis servicios</Text>
-          <Text style={styles.subtitulo}>
-            Administra los servicios que ofreces
-          </Text>
+        <View style={styles.encabezadoPrincipal}>
+          <Pressable
+            style={styles.botonVolver}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={23}
+              color="#101828"
+            />
+          </Pressable>
+
+          <View style={styles.encabezadoTexto}>
+            <Text style={styles.titulo}>
+              Mis servicios
+            </Text>
+
+            <Text style={styles.subtitulo}>
+              Administra los servicios que ofreces
+            </Text>
+          </View>
         </View>
 
         <Pressable
           style={styles.botonAgregarSuperior}
-          onPress={() => navigation.navigate('CrearServicio')}
+          onPress={() =>
+            navigation.navigate(
+              'CrearServicio'
+            )
+          }
         >
-          <Ionicons name="add" size={26} color="#FFFFFF" />
+          <Ionicons
+            name="add"
+            size={26}
+            color="#FFFFFF"
+          />
         </Pressable>
       </View>
 
@@ -135,13 +188,21 @@ export default function MisServiciosScreen({ navigation }) {
               No se pudieron cargar tus servicios
             </Text>
 
-            <Text style={styles.errorTexto}>{error}</Text>
+            <Text style={styles.errorTexto}>
+              {error}
+            </Text>
 
             <Pressable
               style={styles.botonReintentar}
-              onPress={() => cargarServicios()}
+              onPress={() =>
+                cargarServicios()
+              }
             >
-              <Text style={styles.botonReintentarTexto}>
+              <Text
+                style={
+                  styles.botonReintentarTexto
+                }
+              >
                 Intentar nuevamente
               </Text>
             </Pressable>
@@ -161,16 +222,28 @@ export default function MisServiciosScreen({ navigation }) {
             </Text>
 
             <Text style={styles.vacioTexto}>
-              Publica tu primer servicio para comenzar a mostrar tu trabajo
-              dentro de ConnectaOficios.
+              Publica tu primer servicio para comenzar a mostrar tu trabajo dentro de ConnectaOficios.
             </Text>
 
             <Pressable
               style={styles.botonCrear}
-              onPress={() => navigation.navigate('CrearServicio')}
+              onPress={() =>
+                navigation.navigate(
+                  'CrearServicio'
+                )
+              }
             >
-              <Ionicons name="add-circle-outline" size={21} color="#FFFFFF" />
-              <Text style={styles.botonCrearTexto}>
+              <Ionicons
+                name="add-circle-outline"
+                size={21}
+                color="#FFFFFF"
+              />
+
+              <Text
+                style={
+                  styles.botonCrearTexto
+                }
+              >
                 Crear mi primer servicio
               </Text>
             </Pressable>
@@ -184,9 +257,20 @@ export default function MisServiciosScreen({ navigation }) {
             </Text>
 
             {servicios.map((servicio) => (
-              <View key={servicio.id} style={styles.tarjeta}>
-                <View style={styles.tarjetaEncabezado}>
-                  <View style={styles.iconoServicio}>
+              <View
+                key={servicio.id}
+                style={styles.tarjeta}
+              >
+                <View
+                  style={
+                    styles.tarjetaEncabezado
+                  }
+                >
+                  <View
+                    style={
+                      styles.iconoServicio
+                    }
+                  >
                     <Ionicons
                       name="construct-outline"
                       size={25}
@@ -194,17 +278,28 @@ export default function MisServiciosScreen({ navigation }) {
                     />
                   </View>
 
-                  <View style={styles.informacionPrincipal}>
-                    <Text style={styles.tituloServicio}>
+                  <View
+                    style={
+                      styles.informacionPrincipal
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.tituloServicio
+                      }
+                    >
                       {servicio.titulo}
                     </Text>
 
-                    <View style={styles.estado}>
-                      <View style={styles.puntoEstado} />
-                      <Text style={styles.estadoTexto}>
-                        {obtenerNombreEstado(servicio.estado)}
-                      </Text>
-                    </View>
+                    <Text
+                      style={
+                        styles.estadoTexto
+                      }
+                    >
+                      {obtenerNombreEstado(
+                        servicio.estado
+                      )}
+                    </Text>
                   </View>
                 </View>
 
@@ -215,58 +310,157 @@ export default function MisServiciosScreen({ navigation }) {
                   {servicio.descripcion}
                 </Text>
 
-                <View style={styles.separador} />
+                <View
+                  style={styles.separador}
+                />
 
-                <View style={styles.tarifaContenedor}>
+                <View
+                  style={
+                    styles.tarifaContenedor
+                  }
+                >
                   <View>
-                    <Text style={styles.tarifaEtiqueta}>
+                    <Text
+                      style={
+                        styles.tarifaEtiqueta
+                      }
+                    >
                       Tarifa
                     </Text>
-                    <Text style={styles.tarifa}>
-                      {obtenerTarifa(servicio)}
+
+                    <Text
+                      style={styles.tarifa}
+                    >
+                      {obtenerTarifa(
+                        servicio
+                      )}
                     </Text>
                   </View>
 
-                  <View style={styles.idCategoria}>
-                    <Ionicons
-                      name="pricetag-outline"
-                      size={16}
-                      color="#667085"
-                    />
-                    <Text style={styles.idCategoriaTexto}>
-                      Categoría {servicio.categoriaId}
-                    </Text>
-                  </View>
+                  <Text
+                    style={
+                      styles.categoriaTexto
+                    }
+                  >
+                    Categoría{' '}
+                    {servicio.categoriaId}
+                  </Text>
                 </View>
 
-<Pressable
-  style={styles.botonEditar}
-  onPress={() =>
-    navigation.navigate('EditarServicio', {
-      servicioId: servicio.id,
-    })
-  }
->
-  <Ionicons
-    name="create-outline"
-    size={19}
-    color="#2563EB"
-  />
+                <View
+                  style={styles.acciones}
+                >
+                  <Pressable
+                    style={
+                      styles.botonAccion
+                    }
+                    onPress={() =>
+                      navigation.navigate(
+                        'EditarServicio',
+                        {
+                          servicioId:
+                            servicio.id,
+                        }
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name="create-outline"
+                      size={19}
+                      color="#2563EB"
+                    />
 
-  <Text style={styles.botonEditarTexto}>
-    Editar servicio
-  </Text>
-</Pressable>
+                    <Text
+                      style={
+                        styles.botonAccionTexto
+                      }
+                    >
+                      Editar
+                    </Text>
+                  </Pressable>
 
+                  <Pressable
+                    style={
+                      styles.botonAccion
+                    }
+                    onPress={() =>
+                      navigation.navigate(
+                        'Disponibilidad',
+                        {
+                          servicioId:
+                            servicio.id,
+                        }
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name="time-outline"
+                      size={19}
+                      color="#2563EB"
+                    />
+
+                    <Text
+                      style={
+                        styles.botonAccionTexto
+                      }
+                    >
+                      Horarios
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={
+                      styles.botonAccion
+                    }
+                    onPress={() =>
+                      navigation.navigate(
+                        'ZonaCobertura',
+                        {
+                          servicioId:
+                            servicio.id,
+                        }
+                      )
+                    }
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={19}
+                      color="#2563EB"
+                    />
+
+                    <Text
+                      style={
+                        styles.botonAccionTexto
+                      }
+                    >
+                      Zonas
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
             ))}
 
             <Pressable
-              style={styles.botonCrearInferior}
-              onPress={() => navigation.navigate('CrearServicio')}
+              style={
+                styles.botonCrearInferior
+              }
+              onPress={() =>
+                navigation.navigate(
+                  'CrearServicio'
+                )
+              }
             >
-              <Ionicons name="add" size={21} color="#2563EB" />
-              <Text style={styles.botonCrearInferiorTexto}>
+              <Ionicons
+                name="add"
+                size={21}
+                color="#2563EB"
+              />
+
+              <Text
+                style={
+                  styles.botonCrearInferiorTexto
+                }
+              >
                 Agregar otro servicio
               </Text>
             </Pressable>
@@ -283,9 +477,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   encabezado: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#EAECF0',
@@ -293,29 +486,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  encabezadoPrincipal: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  botonVolver: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+  encabezadoTexto: {
+    flex: 1,
+  },
   titulo: {
-    fontSize: 26,
+    fontSize: 23,
     fontWeight: '700',
     color: '#101828',
   },
   subtitulo: {
-    marginTop: 4,
-    fontSize: 14,
+    marginTop: 3,
+    fontSize: 12,
     color: '#667085',
   },
   botonAgregarSuperior: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 13,
     backgroundColor: '#2563EB',
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 10,
   },
   scroll: {
     flex: 1,
   },
   contenido: {
-    padding: 20,
+    padding: 18,
     paddingBottom: 40,
     flexGrow: 1,
   },
@@ -326,19 +537,18 @@ const styles = StyleSheet.create({
   },
   textoCarga: {
     marginTop: 12,
-    fontSize: 15,
     color: '#667085',
   },
   resultados: {
-    marginBottom: 14,
-    fontSize: 14,
-    fontWeight: '600',
+    marginBottom: 13,
     color: '#667085',
+    fontSize: 13,
+    fontWeight: '600',
   },
   tarjeta: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    padding: 18,
+    padding: 17,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#EAECF0',
@@ -348,49 +558,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   iconoServicio: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 47,
+    height: 47,
+    borderRadius: 13,
     backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 13,
+    marginRight: 12,
   },
   informacionPrincipal: {
     flex: 1,
   },
   tituloServicio: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: '#101828',
   },
-  estado: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  puntoEstado: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#12B76A',
-    marginRight: 6,
-  },
   estadoTexto: {
-    fontSize: 13,
+    marginTop: 5,
+    fontSize: 12,
     fontWeight: '600',
     color: '#027A48',
   },
   descripcion: {
-    marginTop: 16,
+    marginTop: 15,
     fontSize: 14,
-    lineHeight: 21,
+    lineHeight: 20,
     color: '#475467',
   },
   separador: {
     height: 1,
     backgroundColor: '#EAECF0',
-    marginVertical: 16,
+    marginVertical: 15,
   },
   tarifaContenedor: {
     flexDirection: 'row',
@@ -403,24 +602,41 @@ const styles = StyleSheet.create({
   },
   tarifa: {
     marginTop: 3,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: '#101828',
   },
-  idCategoria: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  idCategoriaTexto: {
-    marginLeft: 5,
+  categoriaTexto: {
     fontSize: 12,
     color: '#667085',
+  },
+  acciones: {
+    flexDirection: 'row',
+    gap: 7,
+    marginTop: 17,
+  },
+  botonAccion: {
+    flex: 1,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  botonAccionTexto: {
+    marginLeft: 5,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563EB',
   },
   vacio: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 22,
+    paddingHorizontal: 20,
     paddingVertical: 60,
   },
   iconoVacio: {
@@ -430,102 +646,75 @@ const styles = StyleSheet.create({
     backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
   },
   vacioTitulo: {
-    fontSize: 21,
+    marginTop: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#101828',
-    textAlign: 'center',
   },
   vacioTexto: {
-    marginTop: 9,
-    fontSize: 14,
-    lineHeight: 21,
+    marginTop: 8,
     color: '#667085',
+    lineHeight: 20,
     textAlign: 'center',
   },
   botonCrear: {
-    marginTop: 24,
+    marginTop: 22,
     minHeight: 50,
+    paddingHorizontal: 18,
     borderRadius: 12,
-    paddingHorizontal: 20,
     backgroundColor: '#2563EB',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
   botonCrearTexto: {
-    marginLeft: 8,
-    fontSize: 15,
-    fontWeight: '700',
+    marginLeft: 7,
     color: '#FFFFFF',
+    fontWeight: '700',
   },
   botonCrearInferior: {
-    minHeight: 52,
-    borderRadius: 14,
+    minHeight: 50,
     borderWidth: 1,
     borderColor: '#BFDBFE',
+    borderRadius: 12,
     backgroundColor: '#EFF6FF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
   },
   botonCrearInferiorTexto: {
     marginLeft: 7,
-    fontSize: 15,
-    fontWeight: '700',
     color: '#2563EB',
+    fontWeight: '700',
   },
   errorContenedor: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
     paddingVertical: 60,
   },
   errorTitulo: {
-    marginTop: 14,
+    marginTop: 13,
     fontSize: 18,
     fontWeight: '700',
     color: '#101828',
-    textAlign: 'center',
   },
   errorTexto: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 20,
+    marginTop: 7,
     color: '#667085',
     textAlign: 'center',
   },
   botonReintentar: {
-    marginTop: 20,
-    borderRadius: 10,
+    marginTop: 18,
     backgroundColor: '#2563EB',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    borderRadius: 10,
+    paddingHorizontal: 17,
+    paddingVertical: 11,
   },
   botonReintentarTexto: {
-    fontSize: 14,
-    fontWeight: '700',
     color: '#FFFFFF',
+    fontWeight: '700',
   },
-  botonEditar: {
-  minHeight: 45,
-  marginTop: 16,
-  borderRadius: 11,
-  borderWidth: 1,
-  borderColor: '#BFDBFE',
-  backgroundColor: '#EFF6FF',
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-},
-botonEditarTexto: {
-  marginLeft: 7,
-  fontSize: 14,
-  fontWeight: '700',
-  color: '#2563EB',
-},
 });

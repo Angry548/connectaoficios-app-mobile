@@ -5,6 +5,8 @@ import PerfilTrabajadorScreen from '../screens/trabajador/PerfilTrabajadorScreen
 import MisServiciosScreen from '../screens/trabajador/MisServiciosScreen';
 import CrearServicioScreen from '../screens/trabajador/CrearServicioScreen';
 import EditarServicioScreen from '../screens/trabajador/EditarServicioScreen';
+import DisponibilidadScreen from '../screens/trabajador/DisponibilidadScreen';
+import ZonaCoberturaScreen from '../screens/trabajador/ZonaCoberturaScreen';
 import ChangePasswordScreen from '../screens/shared/ChangePasswordScreen';
 
 const Stack = createNativeStackNavigator();
@@ -40,6 +42,16 @@ export default function TrabajadorNavigator() {
       <Stack.Screen
         name="EditarServicio"
         component={EditarServicioScreen}
+      />
+
+      <Stack.Screen
+        name="Disponibilidad"
+        component={DisponibilidadScreen}
+      />
+
+      <Stack.Screen
+        name="ZonaCobertura"
+        component={ZonaCoberturaScreen}
       />
 
       <Stack.Screen
