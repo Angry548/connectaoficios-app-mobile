@@ -92,7 +92,7 @@ export default function ChatScreen({ navigation, route }) {
   const [error, setError] = useState(null);
 
   const listaRef = useRef(null);
-  const_intervaloRef = useRef(null);
+  const intervaloRef = useRef(null);
 
   const usuarioId = usuario?.id ? Number(usuario.id) : null;
 
@@ -190,14 +190,14 @@ export default function ChatScreen({ navigation, route }) {
 
     // Sondeo periodico como alternativa diferida al canal en tiempo
     // real, que sera habilitado cuando la API lo publique.
-    _intervaloRef.current = setInterval(() => {
+    intervaloRef.current = setInterval(() => {
       cargarMensajes(conversacionId);
     }, 15000);
 
     return () => {
-      if (_intervaloRef.current) {
-        clearInterval(_intervaloRef.current);
-        _intervaloRef.current = null;
+      if (intervaloRef.current) {
+        clearInterval(intervaloRef.current);
+        intervaloRef.current = null;
       }
     };
   }, [conversacionId, cargando, cargarMensajes]);
@@ -431,7 +431,6 @@ export default function ChatScreen({ navigation, route }) {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <FlatList
           ref={listaRef}
