@@ -1,4 +1,8 @@
-import React, { useCallback, useState } from 'react';
+import React, {
+  useCallback,
+  useMemo,
+  useState,
+} from 'react';
 import {
   View,
   Text,
@@ -8,10 +12,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { solicitudService } from '../../services/solicitudService';
+import { userService } from '../../services/userService';
 
 const ESTADOS = {
   PENDIENTE: {
@@ -58,6 +64,8 @@ const FILTROS = [
   { clave: 'ACEPTADA', texto: 'Aceptadas' },
   { clave: 'EN_PROCESO', texto: 'En proceso' },
   { clave: 'COMPLETADA', texto: 'Completadas' },
+  { clave: 'RECHAZADA', texto: 'Rechazadas' },
+  { clave: 'CANCELADA', texto: 'Canceladas' },
 ];
 
 const obtenerEstiloEstado = (estado) => {
@@ -71,38 +79,25 @@ const obtenerEstiloEstado = (estado) => {
   );
 };
 
-const formatearFecha = (valor, conHora = false) => {
+const formatearFecha = (valor) => {
   if (!valor) {
-    return 'Por definir';
+    return 'Fecha por definir';
   }
 
-  const fecha = new Date(valor);
+  const partes = String(valor).split('-');
 
-  if (Number.isNaN(fecha.getTime())) {
-    return String(valor);
+  if (partes.length === 3) {
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
   }
 
-  if (conHora) {
-    return fecha.toLocaleString('es-SV', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }
-
-  return fecha.toLocaleDateString('es-SV', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  return String(valor);
 };
 
 export default function SolicitudesRecibidasScreen({
   navigation,
 }) {
   const [solicitudes, setSolicitudes] = useState([]);
+  const [clientes, setClientes] = useState({});
   const [filtro, setFiltro] = useState('TODAS');
   const [cargando, setCargando] = useState(true);
   const [actualizando, setActualizando] = useState(false);
@@ -113,9 +108,35 @@ export default function SolicitudesRecibidasScreen({
       setError(null);
 
       const resultado =
-        await solicitudService.listarPorTrabajador();
+        await solicitudService.obtenerMisSolicitudesTrabajador();
 
       setSolicitudes(resultado);
+
+      const idsClientes = [
+        ...new Set(
+          resultado
+            .map((item) => Number(item.clienteId))
+            .filter((id) => Number.isInteger(id) && id > 0)
+        ),
+      ];
+
+      const resultadosUsuarios =
+        await Promise.all(
+          idsClientes.map(async (id) => {
+            try {
+              const usuario =
+                await userService.obtenerUsuarioPorId(id);
+
+              return [id, usuario];
+            } catch {
+              return [id, null];
+            }
+          })
+        );
+
+      setClientes(
+        Object.fromEntries(resultadosUsuarios)
+      );
     } catch (excepcion) {
       setError(
         excepcion.message ||
@@ -144,7 +165,7 @@ export default function SolicitudesRecibidasScreen({
     return unsubscribe;
   }, [navigation, cargarSolicitudes]);
 
-  const solicitudesFiltradas = React.useMemo(() => {
+  const solicitudesFiltradas = useMemo(() => {
     if (filtro === 'TODAS') {
       return solicitudes;
     }
@@ -155,27 +176,28 @@ export default function SolicitudesRecibidasScreen({
     );
   }, [solicitudes, filtro]);
 
-  const pendientes = React.useMemo(() => {
+  const pendientes = useMemo(() => {
     return solicitudes.filter(
       (solicitud) =>
-        String(solicitud.estado).toUpperCase() === 'PENDIENTE'
+        String(solicitud.estado).toUpperCase() ===
+        'PENDIENTE'
     ).length;
   }, [solicitudes]);
 
   const abrirDetalle = (solicitud) => {
-    navigation.navigate('DetalleSolicitudTrabajador', {
-      solicitudId: solicitud.id,
-    });
-  };
-
-  const reintentar = () => {
-    setCargando(true);
-    setError(null);
-    cargarSolicitudes();
+    navigation.navigate(
+      'DetalleSolicitudTrabajador',
+      {
+        solicitudId: solicitud.idSolicitud,
+      }
+    );
   };
 
   const renderizarSolicitud = ({ item }) => {
-    const estiloEstado = obtenerEstiloEstado(item.estado);
+    const estiloEstado =
+      obtenerEstiloEstado(item.estado);
+
+    const cliente = clientes[item.clienteId];
 
     return (
       <TouchableOpacity
@@ -194,22 +216,58 @@ export default function SolicitudesRecibidasScreen({
 
           <View style={styles.datosPrincipales}>
             <Text style={styles.tituloServicio}>
-              {item.servicio?.nombre ||
-                item.servicioNombre ||
-                'Servicio'}
+              {item.servicioTitulo || 'Servicio'}
             </Text>
 
-            <Text style={styles.nombreCliente}>
-              {item.clienteNombre
-                ? `Cliente: ${item.clienteNombre}`
-                : 'Solicitud de un cliente'}
+            <View style={styles.filaCliente}>
+              <Ionicons
+                name="person-outline"
+                size={13}
+                color="#64748B"
+              />
+
+              <Text style={styles.nombreCliente}>
+                {cliente?.nombre ||
+                  `Cliente #${item.clienteId}`}
+              </Text>
+            </View>
+          </View>
+
+          <Ionicons
+            name="chevron-forward-outline"
+            size={20}
+            color="#94A3B8"
+          />
+        </View>
+
+        <Text
+          style={styles.descripcion}
+          numberOfLines={2}
+        >
+          {item.descripcionTrabajo ||
+            'Sin descripción registrada'}
+        </Text>
+
+        <View style={styles.tarjetaPie}>
+          <View style={styles.datoPie}>
+            <Ionicons
+              name="calendar-outline"
+              size={14}
+              color="#64748B"
+            />
+
+            <Text style={styles.textoDato}>
+              {formatearFecha(item.fechaPropuesta)}
             </Text>
           </View>
 
           <View
             style={[
               styles.badge,
-              { backgroundColor: estiloEstado.fondo },
+              {
+                backgroundColor:
+                  estiloEstado.fondo,
+              },
             ]}
           >
             <Ionicons
@@ -228,104 +286,9 @@ export default function SolicitudesRecibidasScreen({
             </Text>
           </View>
         </View>
-
-        <Text style={styles.descripcionServicio}>
-          {item.descripcionTrabajo ||
-            'Sin descripcion registrada'}
-        </Text>
-
-        <View style={styles.tarjetaPie}>
-          <View style={styles.datoPie}>
-            <Ionicons
-              name="calendar-outline"
-              size={14}
-              color="#64748B"
-            />
-
-            <Text style={styles.textoDato}>
-              {formatearFecha(item.fechaPropuesta)} ·{' '}
-              {item.horaAproximada || 'hora por definir'}
-            </Text>
-          </View>
-
-          <View style={styles.datoPie}>
-            <Ionicons
-              name="location-outline"
-              size={14}
-              color="#64748B"
-            />
-
-            <Text
-              style={styles.textoDato}
-              numberOfLines={1}
-            >
-              {item.direccion || 'Sin direccion'}
-            </Text>
-          </View>
-        </View>
       </TouchableOpacity>
     );
   };
-
-  const renderizarVacio = () => (
-    <View style={styles.estadoVacio}>
-      <View style={styles.iconoVacio}>
-        <Ionicons
-          name="mail-open-outline"
-          size={38}
-          color="#0D9488"
-        />
-      </View>
-
-      <Text style={styles.tituloVacio}>
-        {filtro === 'TODAS'
-          ? 'No tienes solicitudes recibidas'
-          : 'Sin solicitudes en este estado'}
-      </Text>
-
-      <Text style={styles.textoVacio}>
-        {filtro === 'TODAS'
-          ? 'Cuando un cliente solicite uno de tus servicios, aparecera aqui.'
-          : 'Prueba con otro filtro para ver el resto de tus solicitudes.'}
-      </Text>
-    </View>
-  );
-
-  const renderizarError = () => (
-    <View style={styles.estadoVacio}>
-      <View style={[styles.iconoVacio, styles.iconoError]}>
-        <Ionicons
-          name="cloud-offline-outline"
-          size={38}
-          color="#DC2626"
-        />
-      </View>
-
-      <Text style={styles.tituloVacio}>
-        No pudimos cargar tus solicitudes
-      </Text>
-
-      <Text style={styles.textoVacio}>
-        {error}
-      </Text>
-
-      <TouchableOpacity
-        style={styles.botonReintentar}
-        onPress={reintentar}
-        activeOpacity={0.85}
-      >
-        <Ionicons
-          name="refresh-outline"
-          size={18}
-          color="#FFFFFF"
-        />
-
-        <Text style={styles.textoBotonReintentar}>
-          Reintentar
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
 
   return (
     <SafeAreaView
@@ -359,62 +322,137 @@ export default function SolicitudesRecibidasScreen({
             {pendientes > 0
               ? `${pendientes} pendiente${
                   pendientes === 1 ? '' : 's'
-                } por responder`
-              : 'Gestiona tus trabajos'}
+                } por revisar`
+              : 'Gestiona tus solicitudes'}
           </Text>
         </View>
       </View>
 
-      {cargando ? (
-        <View style={styles.centro}>
-          <ActivityIndicator
-            size="large"
-            color="#0D9488"
-          />
+      <View style={styles.contenedorLista}>
+        {!cargando && !error ? (
+          <View style={styles.filtrosContenedor}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filtros}
+            >
+              {FILTROS.map((item) => {
+                const seleccionado =
+                  filtro === item.clave;
 
-          <Text style={styles.textoCarga}>
-            Cargando solicitudes...
-          </Text>
-        </View>
-      ) : error ? (
-        renderizarError()
-      ) : (
-        <View style={styles.listaContenedor}>
-          <View style={styles.filtros}>
-            {FILTROS.map((item) => (
-              <TouchableOpacity
-                key={item.clave}
-                style={[
-                  styles.filtro,
-                  filtro === item.clave && styles.filtroActivo,
-                ]}
-                onPress={() => setFiltro(item.clave)}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.filtroTexto,
-                    filtro === item.clave &&
-                      styles.filtroTextoActivo,
-                  ]}
-                >
-                  {item.texto}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                return (
+                  <TouchableOpacity
+                    key={item.clave}
+                    style={[
+                      styles.filtro,
+                      seleccionado &&
+                        styles.filtroSeleccionado,
+                    ]}
+                    onPress={() =>
+                      setFiltro(item.clave)
+                    }
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.textoFiltro,
+                        seleccionado &&
+                          styles.textoFiltroSeleccionado,
+                      ]}
+                    >
+                      {item.texto}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
+        ) : null}
 
+        {cargando ? (
+          <View style={styles.centro}>
+            <ActivityIndicator
+              size="large"
+              color="#0D9488"
+            />
+
+            <Text style={styles.textoCarga}>
+              Cargando solicitudes...
+            </Text>
+          </View>
+        ) : error ? (
+          <View style={styles.estadoVacio}>
+            <View
+              style={[
+                styles.iconoVacio,
+                styles.iconoError,
+              ]}
+            >
+              <Ionicons
+                name="cloud-offline-outline"
+                size={38}
+                color="#DC2626"
+              />
+            </View>
+
+            <Text style={styles.tituloVacio}>
+              No pudimos cargar las solicitudes
+            </Text>
+
+            <Text style={styles.textoVacio}>
+              {error}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.botonReintentar}
+              onPress={() => {
+                setCargando(true);
+                cargarSolicitudes();
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="refresh-outline"
+                size={18}
+                color="#FFFFFF"
+              />
+
+              <Text style={styles.textoBoton}>
+                Reintentar
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
           <FlatList
-            style={styles.lista}
             data={solicitudesFiltradas}
-            keyExtractor={(item) => String(item.id)}
+            keyExtractor={(item) =>
+              String(item.idSolicitud)
+            }
             renderItem={renderizarSolicitud}
             contentContainerStyle={
               solicitudesFiltradas.length === 0
                 ? styles.listaVacia
                 : styles.listaContenido
             }
-            ListEmptyComponent={renderizarVacio}
+            ListEmptyComponent={
+              <View style={styles.estadoVacio}>
+                <View style={styles.iconoVacio}>
+                  <Ionicons
+                    name="file-tray-outline"
+                    size={38}
+                    color="#0D9488"
+                  />
+                </View>
+
+                <Text style={styles.tituloVacio}>
+                  No hay solicitudes
+                </Text>
+
+                <Text style={styles.textoVacio}>
+                  No tienes solicitudes en este estado.
+                </Text>
+              </View>
+            }
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
@@ -425,8 +463,8 @@ export default function SolicitudesRecibidasScreen({
               />
             }
           />
-        </View>
-      )}
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -437,7 +475,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#12344D',
   },
   header: {
-    backgroundColor: '#12344D',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -449,8 +486,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 13,
     backgroundColor: '#1E506B',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 13,
   },
   headerTexto: {
@@ -466,55 +503,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  centro: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-    gap: 12,
-  },
-  textoCarga: {
-    color: '#64748B',
-    fontSize: 13,
-  },
-  listaContenedor: {
+  contenedorLista: {
     flex: 1,
     backgroundColor: '#F8FAFC',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
+  filtrosContenedor: {
+    paddingTop: 17,
   },
   filtros: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
     paddingHorizontal: 20,
-    paddingTop: 16,
+    gap: 8,
   },
   filtro: {
-    paddingHorizontal: 13,
-    paddingVertical: 8,
-    borderRadius: 20,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  filtroActivo: {
+  filtroSeleccionado: {
     backgroundColor: '#0D9488',
     borderColor: '#0D9488',
   },
-  filtroTexto: {
-    color: '#475569',
-    fontSize: 12,
+  textoFiltro: {
+    color: '#64748B',
+    fontSize: 11,
     fontWeight: '700',
   },
-  filtroTextoActivo: {
+  textoFiltroSeleccionado: {
     color: '#FFFFFF',
-  },
-  lista: {
-    flex: 1,
   },
   listaContenido: {
     padding: 20,
+    paddingTop: 16,
     paddingBottom: 36,
   },
   listaVacia: {
@@ -537,8 +562,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 13,
     backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
   },
   datosPrincipales: {
@@ -550,49 +575,61 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  filaCliente: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
   nombreCliente: {
     color: '#64748B',
     fontSize: 11,
-    marginTop: 3,
   },
-  descripcionServicio: {
-    color: '#475569',
+  descripcion: {
+    color: '#64748B',
     fontSize: 12,
     lineHeight: 18,
-    marginTop: 11,
+    marginTop: 12,
   },
   tarjetaPie: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
-    paddingTop: 11,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    gap: 12,
+    paddingTop: 12,
+    marginTop: 12,
   },
   datoPie: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    flexShrink: 1,
   },
   textoDato: {
     color: '#64748B',
-    fontSize: 11,
-    flexShrink: 1,
+    fontSize: 12,
   },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 9,
+    paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
     gap: 4,
   },
   badgeTexto: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
+  },
+  centro: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  textoCarga: {
+    color: '#64748B',
+    fontSize: 13,
   },
   estadoVacio: {
     flex: 1,
@@ -605,23 +642,23 @@ const styles = StyleSheet.create({
     height: 84,
     borderRadius: 26,
     backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center',
+    marginBottom: 18,
   },
   iconoError: {
     backgroundColor: '#FEE2E2',
   },
   tituloVacio: {
     color: '#172B3A',
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
     textAlign: 'center',
   },
   textoVacio: {
     color: '#64748B',
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 20,
     textAlign: 'center',
     marginTop: 7,
   },
@@ -633,11 +670,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 13,
-    marginTop: 20,
+    marginTop: 18,
   },
-  textoBotonReintentar: {
+  textoBoton: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
   },
 });

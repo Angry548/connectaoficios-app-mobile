@@ -43,11 +43,7 @@ export default function PerfilTrabajadorScreen({ navigation }) {
 
         <View style={styles.headerTexto}>
           <Text style={styles.tituloHeader}>
-            Perfil profesional
-          </Text>
-
-          <Text style={styles.subtituloHeader}>
-            Cuenta de trabajador
+            Ajustes
           </Text>
         </View>
       </View>
@@ -57,104 +53,9 @@ export default function PerfilTrabajadorScreen({ navigation }) {
         contentContainerStyle={styles.contenido}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.perfil}>
-          <View style={styles.avatar}>
-            <Ionicons
-              name="person-circle-outline"
-              size={38}
-              color="#0D9488"
-            />
-          </View>
+        
 
-          <View style={styles.datosPrincipales}>
-            <Text style={styles.nombre}>
-              {usuario?.nombre || 'Trabajador'}
-            </Text>
-
-            <Text style={styles.correo}>
-              {usuario?.correo || 'Cuenta de ConnectaOficios'}
-            </Text>
-
-            <View style={styles.rolContainer}>
-              <Ionicons
-                name="briefcase-outline"
-                size={14}
-                color="#0D9488"
-              />
-
-              <Text style={styles.rol}>
-                Trabajador
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.seccion}>
-          <Text style={styles.tituloSeccion}>
-            Perfil
-          </Text>
-
-          <TouchableOpacity
-            style={styles.opcion}
-            activeOpacity={0.8}
-          >
-            <View style={styles.iconoOpcion}>
-              <Ionicons
-                name="person-outline"
-                size={22}
-                color="#0D9488"
-              />
-            </View>
-
-            <View style={styles.textoOpcion}>
-              <Text style={styles.tituloOpcion}>
-                Datos personales
-              </Text>
-
-              <Text style={styles.descripcionOpcion}>
-                Consulta y administra los datos asociados a tu cuenta.
-              </Text>
-            </View>
-
-            <Ionicons
-              name="chevron-forward-outline"
-              size={21}
-              color="#94A3B8"
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.opcion,
-              styles.opcionSeparada,
-            ]}
-            activeOpacity={0.8}
-          >
-            <View style={styles.iconoOpcion}>
-              <Ionicons
-                name="briefcase-outline"
-                size={22}
-                color="#0D9488"
-              />
-            </View>
-
-            <View style={styles.textoOpcion}>
-              <Text style={styles.tituloOpcion}>
-                Información profesional
-              </Text>
-
-              <Text style={styles.descripcionOpcion}>
-                Administra la información visible en tu perfil profesional.
-              </Text>
-            </View>
-
-            <Ionicons
-              name="chevron-forward-outline"
-              size={21}
-              color="#94A3B8"
-            />
-          </TouchableOpacity>
-        </View>
+        
 
         <View style={styles.seccion}>
           <Text style={styles.tituloSeccion}>

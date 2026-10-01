@@ -1,104 +1,294 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, {
+  useCallback,
+  useState,
+} from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
   ActivityIndicator,
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { promocionService } from '../../services/promocionService';
+import { useFocusEffect } from '@react-navigation/native';
+import promocionService from '../../services/promocionService';
+import planPromocionService from '../../services/planPromocionService';
+import transaccionPagoService from '../../services/transaccionPagoService';
 
-const ESTADO_ETIQUETAS = {
-  PENDIENTE: {
-    texto: 'Pendiente de pago',
-    color: '#B45309',
-    fondo: '#FEF3C7',
-    icono: 'time-outline',
-  },
-  ACTIVA: {
-    texto: 'Activa',
-    color: '#0D9488',
-    fondo: '#E6F4F1',
-    icono: 'checkmark-circle-outline',
-  },
-  FINALIZADA: {
-    texto: 'Finalizada',
-    color: '#64748B',
-    fondo: '#F1F5F9',
-    icono: 'flag-outline',
-  },
-  CANCELADA: {
-    texto: 'Cancelada',
-    color: '#DC2626',
-    fondo: '#FEF2F2',
-    icono: 'close-circle-outline',
-  },
-};
+const obtenerMensajeError = (
+  error,
+  mensajePredeterminado
+) =>
+  error?.response?.data?.message ||
+  error?.response?.data?.mensaje ||
+  error?.response?.data?.error ||
+  error?.message ||
+  mensajePredeterminado;
 
-const formatearFecha = (fechaTexto) => {
-  if (!fechaTexto) {
-    return 'Sin definir';
+const obtenerNombreEstado = (estado) => {
+  if (!estado) {
+    return 'Sin estado';
   }
 
-  const fecha = new Date(fechaTexto);
+  return estado
+    .toString()
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(
+      /\b\w/g,
+      (letra) => letra.toUpperCase()
+    );
+};
 
-  return fecha.toLocaleDateString('es-SV', {
+const formatearFecha = (fecha) => {
+  if (!fecha) {
+    return 'No disponible';
+  }
+
+  const valor = new Date(fecha);
+
+  if (Number.isNaN(valor.getTime())) {
+    return fecha;
+  }
+
+  return valor.toLocaleString('es-SV', {
     day: '2-digit',
-    month: 'long',
+    month: 'short',
     year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 };
 
-export default function DetallePromocionScreen({ route, navigation }) {
-  const { promocionId } = route.params;
+const obtenerColorEstado = (estado) => {
+  switch (estado) {
+    case 'ACTIVA':
+    case 'APROBADA':
+      return {
+        fondo: '#ECFDF3',
+        texto: '#027A48',
+        icono: 'checkmark-circle-outline',
+      };
+
+    case 'PENDIENTE':
+      return {
+        fondo: '#FFFAEB',
+        texto: '#B54708',
+        icono: 'time-outline',
+      };
+
+    case 'RECHAZADA':
+    case 'CANCELADA':
+      return {
+        fondo: '#FEF3F2',
+        texto: '#B42318',
+        icono: 'close-circle-outline',
+      };
+
+    case 'FINALIZADA':
+      return {
+        fondo: '#F2F4F7',
+        texto: '#475467',
+        icono: 'flag-outline',
+      };
+
+    default:
+      return {
+        fondo: '#F2F4F7',
+        texto: '#475467',
+        icono: 'information-circle-outline',
+      };
+  }
+};
+
+export default function DetallePromocionScreen({
+  navigation,
+  route,
+}) {
+  const promocionId = route.params?.promocionId;
+const servicioTitulo = route.params?.servicioTitulo;
 
   const [promocion, setPromocion] = useState(null);
+  const [plan, setPlan] = useState(null);
+  const [transacciones, setTransacciones] =
+    useState([]);
+  const [vigente, setVigente] = useState(false);
+
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState(null);
+  const [actualizando, setActualizando] =
+    useState(false);
+  const [cancelando, setCancelando] =
+    useState(false);
+  const [error, setError] = useState('');
 
-  const cargarPromocion = useCallback(async () => {
-    try {
-      setError(null);
-      const datos = await promocionService.obtenerPromocionPorId(promocionId);
-      setPromocion(datos);
-    } catch (err) {
-      setError(
-        'No fue posible cargar el detalle de la promoción.'
-      );
-    } finally {
-      setCargando(false);
+  const cargarDetalle = useCallback(
+    async (mostrarCarga = true) => {
+      if (!promocionId) {
+        setError(
+          'No se recibió el identificador de la promoción.'
+        );
+        setCargando(false);
+        setActualizando(false);
+        return;
+      }
+
+      if (mostrarCarga) {
+        setCargando(true);
+      }
+
+      setError('');
+
+      try {
+        const promocionRespuesta =
+          await promocionService.obtenerPorId(
+            promocionId
+          );
+
+        setPromocion(promocionRespuesta);
+
+        const [
+          planRespuesta,
+          transaccionesRespuesta,
+          vigenteRespuesta,
+        ] = await Promise.all([
+          planPromocionService.obtenerPorId(
+            promocionRespuesta.planId
+          ),
+          transaccionPagoService.obtenerPorPromocion(
+            promocionId
+          ),
+          promocionService.estaVigente(
+            promocionId
+          ),
+        ]);
+
+        setPlan(planRespuesta);
+        setTransacciones(
+          Array.isArray(transaccionesRespuesta)
+            ? transaccionesRespuesta
+            : []
+        );
+        setVigente(Boolean(vigenteRespuesta));
+      } catch (err) {
+        setError(
+          obtenerMensajeError(
+            err,
+            'No se pudo cargar el detalle de la promoción.'
+          )
+        );
+      } finally {
+        setCargando(false);
+        setActualizando(false);
+      }
+    },
+    [promocionId]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      cargarDetalle();
+    }, [cargarDetalle])
+  );
+
+  const actualizar = async () => {
+    setActualizando(true);
+    await cargarDetalle(false);
+  };
+
+  const transaccionPendiente = transacciones.find(
+    (item) => item.estado === 'PENDIENTE'
+  );
+
+  const cancelarTransaccion = () => {
+    if (!transaccionPendiente) {
+      return;
     }
-  }, [promocionId]);
 
-  useEffect(() => {
-    cargarPromocion();
-  }, [cargarPromocion]);
+    Alert.alert(
+      'Cancelar transacción',
+      'La transacción pendiente será cancelada y la promoción dejará de continuar con el proceso.',
+      [
+        {
+          text: 'Volver',
+          style: 'cancel',
+        },
+        {
+          text: 'Cancelar transacción',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelando(true);
 
-  const etiqueta = promocion
-    ? ESTADO_ETIQUETAS[promocion.estado] ?? ESTADO_ETIQUETAS.PENDIENTE
-    : null;
+            try {
+              await transaccionPagoService.cancelar(
+                transaccionPendiente.id
+              );
+
+              Alert.alert(
+                'Transacción cancelada',
+                'La transacción fue cancelada correctamente.'
+              );
+
+              await cargarDetalle(false);
+            } catch (err) {
+              Alert.alert(
+                'No se pudo cancelar',
+                obtenerMensajeError(
+                  err,
+                  'No se pudo cancelar la transacción.'
+                )
+              );
+            } finally {
+              setCancelando(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (cargando) {
+    return (
+      <SafeAreaView style={styles.contenedor}>
+        <View style={styles.centro}>
+          <ActivityIndicator size="large" />
+
+          <Text style={styles.textoCarga}>
+            Cargando promoción...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const colorPromocion = obtenerColorEstado(
+    promocion?.estado
+  );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#12344D" />
-
-      <View style={styles.header}>
-        <TouchableOpacity
+    <SafeAreaView style={styles.contenedor}>
+      <View style={styles.encabezado}>
+        <Pressable
           style={styles.botonVolver}
           onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back-outline" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+          <Ionicons
+            name="arrow-back"
+            size={23}
+            color="#101828"
+          />
+        </Pressable>
 
-        <View style={styles.headerTexto}>
-          <Text style={styles.tituloHeader}>Detalle de promoción</Text>
-          <Text style={styles.subtituloHeader}>
-            Información de tu promoción contratada
+        <View style={styles.encabezadoTexto}>
+          <Text style={styles.titulo}>
+            Detalle de promoción
+          </Text>
+
+          <Text style={styles.subtitulo}>
+            Promoción #{promocionId}
           </Text>
         </View>
       </View>
@@ -106,274 +296,834 @@ export default function DetallePromocionScreen({ route, navigation }) {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.contenido}
-        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={actualizando}
+            onRefresh={actualizar}
+          />
+        }
       >
-        {cargando ? (
-          <View style={styles.estadoCentro}>
-            <ActivityIndicator size="large" color="#0D9488" />
+        {error ? (
+          <View style={styles.errorCaja}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={22}
+              color="#B42318"
+            />
+
+            <View style={styles.flex}>
+              <Text style={styles.errorTitulo}>
+                No se pudo cargar la promoción
+              </Text>
+
+              <Text style={styles.errorTexto}>
+                {error}
+              </Text>
+
+              <Pressable
+                style={styles.reintentar}
+                onPress={() =>
+                  cargarDetalle()
+                }
+              >
+                <Text
+                  style={styles.reintentarTexto}
+                >
+                  Reintentar
+                </Text>
+              </Pressable>
+            </View>
           </View>
-        ) : error ? (
-          <View style={styles.estadoCentro}>
-            <Ionicons name="alert-circle-outline" size={40} color="#DC2626" />
-            <Text style={styles.textoError}>{error}</Text>
-          </View>
-        ) : (
+        ) : promocion ? (
           <>
             <View style={styles.tarjetaPrincipal}>
               <View style={styles.iconoPrincipal}>
-                <Ionicons name="star" size={26} color="#FFFFFF" />
+                <Ionicons
+                  name="megaphone-outline"
+                  size={30}
+                  color="#2563EB"
+                />
               </View>
 
-              <Text style={styles.nombrePlan}>{promocion.planNombre}</Text>
+              <Text style={styles.nombrePlan}>
+                {promocion.planNombre ||
+                  plan?.nombre ||
+                  'Promoción'}
+              </Text>
+
+              <Text style={styles.servicio}>
+  {servicioTitulo ||
+    `Servicio #${promocion.servicioId}`}
+</Text>
 
               <View
                 style={[
-                  styles.badgeEstado,
-                  { backgroundColor: etiqueta.fondo },
+                  styles.estadoGrande,
+                  {
+                    backgroundColor:
+                      colorPromocion.fondo,
+                  },
                 ]}
               >
                 <Ionicons
-                  name={etiqueta.icono}
-                  size={14}
-                  color={etiqueta.color}
+                  name={colorPromocion.icono}
+                  size={18}
+                  color={colorPromocion.texto}
                 />
-                <Text style={[styles.textoBadge, { color: etiqueta.color }]}>
-                  {etiqueta.texto}
+
+                <Text
+                  style={[
+                    styles.estadoGrandeTexto,
+                    {
+                      color:
+                        colorPromocion.texto,
+                    },
+                  ]}
+                >
+                  {obtenerNombreEstado(
+                    promocion.estado
+                  )}
                 </Text>
               </View>
+
+              {promocion.estado === 'ACTIVA' ? (
+                <View style={styles.vigencia}>
+                  <View
+                    style={[
+                      styles.puntoVigencia,
+                      {
+                        backgroundColor: vigente
+                          ? '#12B76A'
+                          : '#98A2B3',
+                      },
+                    ]}
+                  />
+
+                  <Text style={styles.vigenciaTexto}>
+                    {vigente
+                      ? 'Promoción vigente'
+                      : 'Promoción no vigente'}
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
-            <View style={styles.seccion}>
-              <Text style={styles.tituloSeccion}>Vigencia</Text>
+            <Text style={styles.seccionTitulo}>
+              Plan contratado
+            </Text>
 
-              <View style={styles.fila}>
-                <View style={styles.iconoFila}>
+            <View style={styles.tarjeta}>
+              <View style={styles.filaIcono}>
+                <View style={styles.iconoDato}>
                   <Ionicons
-                    name="play-outline"
-                    size={18}
-                    color="#0D9488"
+                    name="rocket-outline"
+                    size={20}
+                    color="#2563EB"
                   />
                 </View>
 
-                <View style={styles.textoFila}>
-                  <Text style={styles.etiquetaFila}>Fecha de inicio</Text>
-                  <Text style={styles.valorFila}>
-                    {formatearFecha(promocion.fechaInicio)}
+                <View style={styles.flex}>
+                  <Text style={styles.datoEtiqueta}>
+                    Plan
+                  </Text>
+
+                  <Text style={styles.datoValor}>
+                    {plan?.nombre ||
+                      promocion.planNombre ||
+                      'No disponible'}
                   </Text>
                 </View>
               </View>
 
-              <View style={[styles.fila, styles.filaSeparada]}>
-                <View style={styles.iconoFila}>
-                  <Ionicons name="flag-outline" size={18} color="#0D9488" />
+              <View style={styles.divisor} />
+
+              <View style={styles.datosDobles}>
+                <View style={styles.datoDoble}>
+                  <Text style={styles.datoEtiqueta}>
+                    Duración
+                  </Text>
+
+                  <Text style={styles.datoValor}>
+                    {plan?.duracionDias
+                      ? `${plan.duracionDias} días`
+                      : 'No disponible'}
+                  </Text>
                 </View>
 
-                <View style={styles.textoFila}>
-                  <Text style={styles.etiquetaFila}>Fecha de fin</Text>
-                  <Text style={styles.valorFila}>
-                    {formatearFecha(promocion.fechaFin)}
+                <View style={styles.datoDoble}>
+                  <Text style={styles.datoEtiqueta}>
+                    Precio
+                  </Text>
+
+                  <Text style={styles.precio}>
+                    {plan
+                      ? `$${Number(
+                          plan.precio
+                        ).toFixed(2)}`
+                      : 'No disponible'}
                   </Text>
                 </View>
               </View>
 
-              {promocion.estado === 'ACTIVA' && (
-                <View style={[styles.fila, styles.filaSeparada]}>
-                  <View style={styles.iconoFila}>
-                    <Ionicons
-                      name={
-                        promocion.vigente
-                          ? 'eye-outline'
-                          : 'eye-off-outline'
-                      }
-                      size={18}
-                      color="#0D9488"
-                    />
-                  </View>
+              {plan?.descripcion ? (
+                <>
+                  <View style={styles.divisor} />
 
-                  <View style={styles.textoFila}>
-                    <Text style={styles.etiquetaFila}>
-                      Visibilidad destacada
-                    </Text>
-                    <Text style={styles.valorFila}>
-                      {promocion.vigente
-                        ? 'Tu servicio se muestra destacado'
-                        : 'La promoción ya no está vigente'}
-                    </Text>
-                  </View>
-                </View>
-              )}
+                  <Text style={styles.datoEtiqueta}>
+                    Descripción
+                  </Text>
+
+                  <Text style={styles.descripcion}>
+                    {plan.descripcion}
+                  </Text>
+                </>
+              ) : null}
             </View>
 
-            <View style={styles.seccion}>
-              <Text style={styles.tituloSeccion}>Servicio promocionado</Text>
+            <Text style={styles.seccionTitulo}>
+              Vigencia
+            </Text>
 
-              <View style={styles.fila}>
-                <View style={styles.iconoFila}>
-                  <Ionicons
-                    name="briefcase-outline"
-                    size={18}
-                    color="#0D9488"
-                  />
+            <View style={styles.tarjeta}>
+              <View style={styles.filaDato}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={20}
+                  color="#667085"
+                />
+
+                <View style={styles.flex}>
+                  <Text style={styles.datoEtiqueta}>
+                    Fecha de creación
+                  </Text>
+
+                  <Text style={styles.datoValor}>
+                    {formatearFecha(
+                      promocion.fechaCreacion
+                    )}
+                  </Text>
                 </View>
+              </View>
 
-                <View style={styles.textoFila}>
-                  <Text style={styles.etiquetaFila}>Identificador</Text>
-                  <Text style={styles.valorFila}>
-                    #{promocion.servicioId}
+              <View style={styles.divisor} />
+
+              <View style={styles.filaDato}>
+                <Ionicons
+                  name="play-circle-outline"
+                  size={20}
+                  color="#667085"
+                />
+
+                <View style={styles.flex}>
+                  <Text style={styles.datoEtiqueta}>
+                    Fecha de inicio
+                  </Text>
+
+                  <Text style={styles.datoValor}>
+                    {formatearFecha(
+                      promocion.fechaInicio
+                    )}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.divisor} />
+
+              <View style={styles.filaDato}>
+                <Ionicons
+                  name="flag-outline"
+                  size={20}
+                  color="#667085"
+                />
+
+                <View style={styles.flex}>
+                  <Text style={styles.datoEtiqueta}>
+                    Fecha de finalización
+                  </Text>
+
+                  <Text style={styles.datoValor}>
+                    {formatearFecha(
+                      promocion.fechaFin
+                    )}
                   </Text>
                 </View>
               </View>
             </View>
 
-            <View style={styles.seccion}>
-              <Text style={styles.tituloSeccion}>Registrada el</Text>
-              <Text style={styles.fechaCreacion}>
-                {formatearFecha(promocion.fechaCreacion)}
+            <View style={styles.seccionTituloFila}>
+              <Text style={styles.seccionTituloSinMargen}>
+                Transacciones
+              </Text>
+
+              <Text style={styles.contador}>
+                {transacciones.length}
               </Text>
             </View>
+
+            {transacciones.length === 0 ? (
+              <View style={styles.vacio}>
+                <Ionicons
+                  name="card-outline"
+                  size={30}
+                  color="#667085"
+                />
+
+                <Text style={styles.vacioTitulo}>
+                  Sin transacciones
+                </Text>
+
+                <Text style={styles.vacioTexto}>
+                  No hay transacciones registradas para
+                  esta promoción.
+                </Text>
+              </View>
+            ) : (
+              transacciones.map((transaccion) => {
+                const colorTransaccion =
+                  obtenerColorEstado(
+                    transaccion.estado
+                  );
+
+                return (
+                  <View
+                    key={transaccion.id}
+                    style={styles.tarjetaTransaccion}
+                  >
+                    <View
+                      style={
+                        styles.transaccionSuperior
+                      }
+                    >
+                      <View
+                        style={
+                          styles.iconoTransaccion
+                        }
+                      >
+                        <Ionicons
+                          name="card-outline"
+                          size={21}
+                          color="#2563EB"
+                        />
+                      </View>
+
+                      <View style={styles.flex}>
+                        <Text
+                          style={
+                            styles.transaccionTitulo
+                          }
+                        >
+                          Transacción #
+                          {transaccion.id}
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.transaccionFecha
+                          }
+                        >
+                          {formatearFecha(
+                            transaccion.fecha
+                          )}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.estadoPequeno,
+                          {
+                            backgroundColor:
+                              colorTransaccion.fondo,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.estadoPequenoTexto,
+                            {
+                              color:
+                                colorTransaccion.texto,
+                            },
+                          ]}
+                        >
+                          {obtenerNombreEstado(
+                            transaccion.estado
+                          )}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View
+                      style={
+                        styles.transaccionImporte
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.transaccionImporteEtiqueta
+                        }
+                      >
+                        Importe
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.transaccionImporteValor
+                        }
+                      >
+                        $
+                        {Number(
+                          transaccion.monto
+                        ).toFixed(2)}{' '}
+                        {transaccion.moneda}
+                      </Text>
+                    </View>
+
+                    {transaccion.referenciaExterna ? (
+                      <View
+                        style={
+                          styles.referenciaCaja
+                        }
+                      >
+                        <Text
+                          style={
+                            styles.referenciaEtiqueta
+                          }
+                        >
+                          Referencia
+                        </Text>
+
+                        <Text
+                          style={
+                            styles.referenciaValor
+                          }
+                        >
+                          {
+                            transaccion.referenciaExterna
+                          }
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })
+            )}
+
+            {transaccionPendiente ? (
+              <Pressable
+                style={[
+                  styles.botonCancelar,
+                  cancelando &&
+                    styles.botonDeshabilitado,
+                ]}
+                disabled={cancelando}
+                onPress={cancelarTransaccion}
+              >
+                {cancelando ? (
+                  <ActivityIndicator
+                    color="#B42318"
+                  />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="close-circle-outline"
+                      size={20}
+                      color="#B42318"
+                    />
+
+                    <Text
+                      style={
+                        styles.botonCancelarTexto
+                      }
+                    >
+                      Cancelar transacción pendiente
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            ) : null}
+
+            {promocion.estado === 'PENDIENTE' &&
+            transaccionPendiente ? (
+              <View style={styles.informacion}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={22}
+                  color="#175CD3"
+                />
+
+                <Text style={styles.informacionTexto}>
+                  La promoción se activará cuando la
+                  transacción sea aprobada por la
+                  administración.
+                </Text>
+              </View>
+            ) : null}
           </>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  contenedor: {
     flex: 1,
-    backgroundColor: '#12344D',
+    backgroundColor: '#F8FAFC',
   },
-  header: {
-    backgroundColor: '#12344D',
+  encabezado: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAECF0',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
   },
   botonVolver: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 13,
-    backgroundColor: '#1E506B',
-    justifyContent: 'center',
+    backgroundColor: '#F2F4F7',
     alignItems: 'center',
-    marginRight: 13,
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  headerTexto: {
+  encabezadoTexto: {
     flex: 1,
   },
-  tituloHeader: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
+  titulo: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#101828',
   },
-  subtituloHeader: {
-    color: '#D6E4EC',
-    fontSize: 12,
+  subtitulo: {
+    fontSize: 13,
+    color: '#667085',
     marginTop: 2,
   },
   scroll: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
   },
   contenido: {
     padding: 20,
     paddingBottom: 36,
   },
-  estadoCentro: {
-    paddingVertical: 60,
+  centro: {
+    flex: 1,
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
   },
-  textoError: {
-    color: '#64748B',
-    fontSize: 13,
-    textAlign: 'center',
-    maxWidth: 260,
+  textoCarga: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#667085',
+  },
+  flex: {
+    flex: 1,
   },
   tarjetaPrincipal: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 22,
+    borderColor: '#EAECF0',
+    borderRadius: 18,
+    padding: 20,
     alignItems: 'center',
+    marginBottom: 22,
   },
   iconoPrincipal: {
-    width: 56,
-    height: 56,
-    borderRadius: 17,
-    backgroundColor: '#0D9488',
-    justifyContent: 'center',
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
-    marginBottom: 14,
+    justifyContent: 'center',
+    marginBottom: 13,
   },
   nombrePlan: {
-    color: '#172B3A',
+    color: '#101828',
+    fontWeight: '700',
     fontSize: 19,
-    fontWeight: '800',
-    marginBottom: 10,
+    textAlign: 'center',
   },
-  badgeEstado: {
+  servicio: {
+    color: '#667085',
+    fontSize: 13,
+    marginTop: 5,
+  },
+  estadoGrande: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
     gap: 6,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginTop: 14,
   },
-  textoBadge: {
+  estadoGrandeTexto: {
     fontSize: 12,
     fontWeight: '700',
   },
-  seccion: {
-    marginTop: 22,
-  },
-  tituloSeccion: {
-    color: '#172B3A',
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 12,
-  },
-  fila: {
+  vigencia: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 15,
+    gap: 7,
+    marginTop: 12,
   },
-  filaSeparada: {
-    marginTop: 10,
+  puntoVigencia: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  iconoFila: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
+  vigenciaTexto: {
+    color: '#475467',
+    fontSize: 12,
+  },
+  seccionTitulo: {
+    color: '#101828',
+    fontWeight: '700',
+    fontSize: 16,
+    marginBottom: 11,
+  },
+  seccionTituloFila: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 13,
+    marginBottom: 11,
+    marginTop: 4,
   },
-  textoFila: {
+  seccionTituloSinMargen: {
+    flex: 1,
+    color: '#101828',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  contador: {
+    minWidth: 28,
+    height: 28,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+    color: '#2563EB',
+    textAlign: 'center',
+    lineHeight: 28,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  tarjeta: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 22,
+  },
+  filaIcono: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconoDato: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+  filaDato: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  datoEtiqueta: {
+    color: '#667085',
+    fontSize: 12,
+    marginBottom: 3,
+  },
+  datoValor: {
+    color: '#101828',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  datosDobles: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  datoDoble: {
     flex: 1,
   },
-  etiquetaFila: {
-    color: '#64748B',
-    fontSize: 11,
+  precio: {
+    color: '#2563EB',
+    fontWeight: '700',
+    fontSize: 16,
   },
-  valorFila: {
-    color: '#172B3A',
+  descripcion: {
+    color: '#475467',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  divisor: {
+    height: 1,
+    backgroundColor: '#EAECF0',
+    marginVertical: 14,
+  },
+  tarjetaTransaccion: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
+  },
+  transaccionSuperior: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconoTransaccion: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  transaccionTitulo: {
+    color: '#101828',
     fontSize: 14,
     fontWeight: '700',
-    marginTop: 2,
   },
-  fechaCreacion: {
-    color: '#64748B',
+  transaccionFecha: {
+    color: '#667085',
+    fontSize: 11,
+    marginTop: 3,
+  },
+  estadoPequeno: {
+    borderRadius: 18,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  estadoPequenoTexto: {
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  transaccionImporte: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  transaccionImporteEtiqueta: {
+    color: '#667085',
     fontSize: 13,
+  },
+  transaccionImporteValor: {
+    color: '#101828',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  referenciaCaja: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+  },
+  referenciaEtiqueta: {
+    color: '#667085',
+    fontSize: 11,
+  },
+  referenciaValor: {
+    color: '#344054',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  vacio: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  vacioTitulo: {
+    color: '#101828',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 10,
+  },
+  vacioTexto: {
+    color: '#667085',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 5,
+  },
+  botonCancelar: {
+    minHeight: 50,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: '#FDA29B',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  botonCancelarTexto: {
+    color: '#B42318',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  botonDeshabilitado: {
+    opacity: 0.5,
+  },
+  informacion: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#EFF8FF',
+    borderWidth: 1,
+    borderColor: '#B2DDFF',
+    borderRadius: 13,
+    padding: 13,
+    marginBottom: 10,
+  },
+  informacionTexto: {
+    flex: 1,
+    color: '#175CD3',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  errorCaja: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#FEF3F2',
+    borderWidth: 1,
+    borderColor: '#FECDCA',
+    borderRadius: 14,
+    padding: 14,
+  },
+  errorTitulo: {
+    color: '#B42318',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  errorTexto: {
+    color: '#B42318',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  reintentar: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+  },
+  reintentarTexto: {
+    color: '#B42318',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

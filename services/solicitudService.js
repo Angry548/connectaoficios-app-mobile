@@ -1,194 +1,516 @@
+import { jwtDecode } from 'jwt-decode';
 import apiJava from './apiJava';
+import { secureStorage } from '../storage/secureStorage';
 
-/**
- * Endpoints del modulo de solicitudes de servicio.
- *
- * Nota: los controladores SolicitudServicio (CON-97) e
- * HistorialEstadoSolicitud (CON-162) aun no estan publicados en la API Java.
- * Las rutas se definieron siguiendo la convencion vigente del backend
- * (ver ServicioController) y se centralizan aqui para ajustarse si difieren.
- */
-const RUTAS = {
-  base: '/api/solicitudes',
-  cliente: '/api/solicitudes/cliente',
-  trabajador: '/api/solicitudes/trabajador',
-  estado: '/api/solicitudes/{id}/estado',
-  cancelar: '/api/solicitudes/{id}/cancelar',
-  historial: '/api/solicitudes/{id}/historial-estados',
+const TAMANIO_PAGINA = 10;
+
+const obtenerValorClaim = (payload, claves) => {
+  for (const clave of claves) {
+    const valor = payload?.[clave];
+
+    if (
+      valor !== undefined &&
+      valor !== null &&
+      valor !== ''
+    ) {
+      return valor;
+    }
+  }
+
+  return null;
 };
 
-const ESTADOS_SOLICITUD = [
-  'PENDIENTE',
-  'ACEPTADA',
-  'RECHAZADA',
-  'EN_PROCESO',
-  'COMPLETADA',
-  'CANCELADA',
-];
+const obtenerSesion = async () => {
+  const token = await secureStorage.obtenerToken();
 
-const normalizarEstado = (estado) => {
-  return estado
-    ? String(estado).trim().toUpperCase()
-    : 'PENDIENTE';
+  if (!token) {
+    throw new Error('No existe una sesión activa.');
+  }
+
+  let payload;
+
+  try {
+    payload = jwtDecode(token);
+  } catch (error) {
+    throw new Error('La sesión no es válida.');
+  }
+
+  if (
+    payload?.exp &&
+    Number(payload.exp) * 1000 <= Date.now()
+  ) {
+    throw new Error(
+      'La sesión ha expirado. Inicia sesión nuevamente.'
+    );
+  }
+
+  const id = obtenerValorClaim(payload, [
+    'nameid',
+    'sub',
+    'id',
+    'userId',
+    'usuarioId',
+    'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier',
+  ]);
+
+  const rol = obtenerValorClaim(payload, [
+    'role',
+    'Role',
+    'http://schemas.microsoft.com/ws/2008/06/identity/claims/role',
+  ]);
+
+  const usuarioId = Number(id);
+
+  if (
+    !Number.isInteger(usuarioId) ||
+    usuarioId <= 0
+  ) {
+    throw new Error(
+      'No se pudo identificar al usuario autenticado.'
+    );
+  }
+
+  return {
+    usuarioId,
+    rol: rol?.toString()?.toUpperCase() ?? '',
+  };
 };
 
-const obtenerMensajeError = (error, mensajeAlternativo) => {
-  return (
-    error?.response?.data?.message ||
-    error?.response?.data?.mensaje ||
-    error?.response?.data?.title ||
-    error?.response?.data?.detail ||
-    mensajeAlternativo
+const normalizarSolicitud = (solicitud) => {
+  if (!solicitud) {
+    return null;
+  }
+
+  return {
+    idSolicitud:
+      solicitud.idSolicitud ??
+      solicitud.id ??
+      null,
+
+    servicioId:
+      solicitud.servicioId ??
+      null,
+
+    servicioTitulo:
+      solicitud.servicioTitulo ??
+      solicitud.tituloServicio ??
+      '',
+
+    clienteId:
+      solicitud.clienteId ??
+      null,
+
+    trabajadorId:
+      solicitud.trabajadorId ??
+      null,
+
+    fechaPropuesta:
+      solicitud.fechaPropuesta ??
+      null,
+
+    horaAproximada:
+      solicitud.horaAproximada ??
+      null,
+
+    direccionServicio:
+      solicitud.direccionServicio ??
+      solicitud.direccion ??
+      '',
+
+    descripcionTrabajo:
+      solicitud.descripcionTrabajo ??
+      '',
+
+    estado:
+      solicitud.estado ??
+      '',
+
+    motivoRechazo:
+      solicitud.motivoRechazo ??
+      null,
+
+    motivoCancelacion:
+      solicitud.motivoCancelacion ??
+      null,
+
+    fechaCreacion:
+      solicitud.fechaCreacion ??
+      null,
+
+    fechaActualizacion:
+      solicitud.fechaActualizacion ??
+      null,
+  };
+};
+
+const normalizarPagina = (
+  data,
+  paginaSolicitada = 0,
+  tamanioSolicitado = TAMANIO_PAGINA
+) => {
+  const contenido =
+    data?.contenido ??
+    data?.content ??
+    data?.items ??
+    [];
+
+  const pagina =
+    data?.pagina ??
+    data?.page ??
+    data?.number ??
+    paginaSolicitada;
+
+  const tamanio =
+    data?.tamanio ??
+    data?.size ??
+    data?.pageSize ??
+    tamanioSolicitado;
+
+  const totalElementos =
+    data?.totalElementos ??
+    data?.totalElements ??
+    data?.totalItems ??
+    contenido.length;
+
+  const totalPaginas =
+    data?.totalPaginas ??
+    data?.totalPages ??
+    (
+      totalElementos > 0
+        ? Math.ceil(totalElementos / tamanio)
+        : 0
+    );
+
+  const ultima =
+    data?.ultima ??
+    data?.last ??
+    (
+      Number(totalPaginas) === 0 ||
+      Number(pagina) >= Number(totalPaginas) - 1
+    );
+
+  return {
+    contenido: Array.isArray(contenido)
+      ? contenido
+          .map(normalizarSolicitud)
+          .filter(Boolean)
+      : [],
+
+    pagina: Number(pagina) || 0,
+
+    tamanio:
+      Number(tamanio) ||
+      tamanioSolicitado,
+
+    totalElementos:
+      Number(totalElementos) || 0,
+
+    totalPaginas:
+      Number(totalPaginas) || 0,
+
+    primera:
+      data?.primera ??
+      data?.first ??
+      Number(pagina) === 0,
+
+    ultima: Boolean(ultima),
+
+    vacia:
+      data?.vacia ??
+      data?.empty ??
+      contenido.length === 0,
+  };
+};
+
+const obtenerSolicitudPorId = async (
+  id,
+  options = {}
+) => {
+  const solicitudId = Number(id);
+
+  if (
+    !Number.isInteger(solicitudId) ||
+    solicitudId <= 0
+  ) {
+    throw new Error(
+      'El identificador de la solicitud no es válido.'
+    );
+  }
+
+  const response = await apiJava.get(
+    `/api/solicitudes/${solicitudId}`,
+    options
+  );
+
+  return normalizarSolicitud(response.data);
+};
+
+const obtenerSolicitudesCliente = async (
+  clienteId,
+  options = {}
+) => {
+  const id = Number(clienteId);
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    throw new Error(
+      'El identificador del cliente no es válido.'
+    );
+  }
+
+  const response = await apiJava.get(
+    `/api/solicitudes/cliente/${id}`,
+    options
+  );
+
+  const data = Array.isArray(response.data)
+    ? response.data
+    : [];
+
+  return data
+    .map(normalizarSolicitud)
+    .filter(Boolean);
+};
+
+const obtenerSolicitudesTrabajador = async (
+  trabajadorId,
+  options = {}
+) => {
+  const id = Number(trabajadorId);
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    throw new Error(
+      'El identificador del trabajador no es válido.'
+    );
+  }
+
+  const response = await apiJava.get(
+    `/api/solicitudes/trabajador/${id}`,
+    options
+  );
+
+  const data = Array.isArray(response.data)
+    ? response.data
+    : [];
+
+  return data
+    .map(normalizarSolicitud)
+    .filter(Boolean);
+};
+
+const obtenerMisSolicitudesCliente = async (
+  options = {}
+) => {
+  const { usuarioId } = await obtenerSesion();
+
+  return obtenerSolicitudesCliente(
+    usuarioId,
+    options
   );
 };
 
-export const solicitudService = {
-  ESTADOS_SOLICITUD,
+const obtenerMisSolicitudesTrabajador = async (
+  options = {}
+) => {
+  const { usuarioId } = await obtenerSesion();
 
-  /**
-   * Crea una solicitud de servicio. La API la registra en estado PENDIENTE.
-   */
-  crear: async (datos) => {
-    try {
-      const response = await apiJava.post(RUTAS.base, {
-        servicioId: Number(datos.servicioId),
-        fechaPropuesta: datos.fechaPropuesta,
-        horaAproximada: datos.horaAproximada,
-        direccion: datos.direccion.trim(),
-        descripcionTrabajo: datos.descripcionTrabajo.trim(),
-      });
-
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudo registrar la solicitud. Inténtalo nuevamente.'
-        )
-      );
-    }
-  },
-
-  /**
-   * Lista las solicitudes realizadas por el Cliente autenticado.
-   */
-  listarPorCliente: async () => {
-    try {
-      const response = await apiJava.get(RUTAS.cliente);
-      return Array.isArray(response.data) ? response.data : [];
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudieron cargar tus solicitudes.'
-        )
-      );
-    }
-  },
-
-  /**
-   * Lista las solicitudes recibidas por el Trabajador autenticado.
-   */
-  listarPorTrabajador: async () => {
-    try {
-      const response = await apiJava.get(RUTAS.trabajador);
-      return Array.isArray(response.data) ? response.data : [];
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudieron cargar las solicitudes recibidas.'
-        )
-      );
-    }
-  },
-
-  /**
-   * Obtiene el detalle de una solicitud.
-   */
-  obtenerDetalle: async (solicitudId) => {
-    try {
-      const response = await apiJava.get(
-        `${RUTAS.base}/${solicitudId}`
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudo cargar el detalle de la solicitud.'
-        )
-      );
-    }
-  },
-
-  /**
-   * Cambia el estado de la solicitud mediante las transiciones
-   * autorizadas por la API.
-   */
-  cambiarEstado: async (solicitudId, estado) => {
-    const estadoNormalizado = normalizarEstado(estado);
-
-    if (!ESTADOS_SOLICITUD.includes(estadoNormalizado)) {
-      throw new Error(
-        `El estado "${estado}" no es válido para una solicitud.`
-      );
-    }
-
-    try {
-      const response = await apiJava.put(
-        RUTAS.estado.replace('{id}', String(solicitudId)),
-        { estado: estadoNormalizado }
-      );
-
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudo actualizar el estado de la solicitud.'
-        )
-      );
-    }
-  },
-
-  /**
-   * Cancela la solicitud registrando el motivo.
-   */
-  cancelar: async (solicitudId, motivo) => {
-    try {
-      const response = await apiJava.put(
-        RUTAS.cancelar.replace('{id}', String(solicitudId)),
-        { motivo: motivo?.trim() || null }
-      );
-
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudo cancelar la solicitud.'
-        )
-      );
-    }
-  },
-
-  /**
-   * Recupera el historial de cambios de estado de la solicitud.
-   */
-  obtenerHistorial: async (solicitudId) => {
-    try {
-      const response = await apiJava.get(
-        RUTAS.historial.replace('{id}', String(solicitudId))
-      );
-      return Array.isArray(response.data) ? response.data : [];
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudo cargar el historial de la solicitud.'
-        )
-      );
-    }
-  },
+  return obtenerSolicitudesTrabajador(
+    usuarioId,
+    options
+  );
 };
+
+const obtenerSolicitudesClientePaginadas = async (
+  pagina = 0,
+  tamanio = TAMANIO_PAGINA,
+  options = {}
+) => {
+  const { usuarioId } = await obtenerSesion();
+
+  const response = await apiJava.get(
+    `/api/solicitudes/cliente/${usuarioId}/paginadas`,
+    {
+      ...options,
+      params: {
+        ...(options.params ?? {}),
+        page: pagina,
+        size: tamanio,
+      },
+    }
+  );
+
+  return normalizarPagina(
+    response.data,
+    pagina,
+    tamanio
+  );
+};
+
+const obtenerSolicitudesTrabajadorPaginadas = async (
+  pagina = 0,
+  tamanio = TAMANIO_PAGINA,
+  options = {}
+) => {
+  const { usuarioId } = await obtenerSesion();
+
+  const response = await apiJava.get(
+    `/api/solicitudes/trabajador/${usuarioId}/paginadas`,
+    {
+      ...options,
+      params: {
+        ...(options.params ?? {}),
+        page: pagina,
+        size: tamanio,
+      },
+    }
+  );
+
+  return normalizarPagina(
+    response.data,
+    pagina,
+    tamanio
+  );
+};
+
+const crearSolicitud = async (
+  datos,
+  options = {}
+) => {
+  const response = await apiJava.post(
+    '/api/solicitudes',
+    datos,
+    options
+  );
+
+  return normalizarSolicitud(response.data);
+};
+
+const aceptarSolicitud = async (
+  id,
+  options = {}
+) => {
+  const response = await apiJava.patch(
+    `/api/solicitudes/${id}/aceptar`,
+    null,
+    options
+  );
+
+  return normalizarSolicitud(response.data);
+};
+
+const rechazarSolicitud = async (
+  id,
+  motivoRechazo,
+  options = {}
+) => {
+  const motivo = motivoRechazo?.trim();
+
+  if (!motivo) {
+    throw new Error(
+      'Debes indicar el motivo del rechazo.'
+    );
+  }
+
+  if (motivo.length > 500) {
+    throw new Error(
+      'El motivo del rechazo no puede superar los 500 caracteres.'
+    );
+  }
+
+  const response = await apiJava.patch(
+    `/api/solicitudes/${id}/rechazar`,
+    {
+      motivoRechazo: motivo,
+    },
+    options
+  );
+
+  return normalizarSolicitud(response.data);
+};
+
+const iniciarSolicitud = async (
+  id,
+  options = {}
+) => {
+  const response = await apiJava.patch(
+    `/api/solicitudes/${id}/iniciar`,
+    null,
+    options
+  );
+
+  return normalizarSolicitud(response.data);
+};
+
+const completarSolicitud = async (
+  id,
+  options = {}
+) => {
+  const response = await apiJava.patch(
+    `/api/solicitudes/${id}/completar`,
+    null,
+    options
+  );
+
+  return normalizarSolicitud(response.data);
+};
+
+const cancelarSolicitud = async (
+  id,
+  motivoCancelacion,
+  options = {}
+) => {
+  const motivo = motivoCancelacion?.trim();
+
+  if (!motivo) {
+    throw new Error(
+      'Debes indicar el motivo de la cancelación.'
+    );
+  }
+
+  if (motivo.length > 500) {
+    throw new Error(
+      'El motivo de la cancelación no puede superar los 500 caracteres.'
+    );
+  }
+
+  const response = await apiJava.patch(
+    `/api/solicitudes/${id}/cancelar`,
+    {
+      motivoCancelacion: motivo,
+    },
+    options
+  );
+
+  return normalizarSolicitud(response.data);
+};
+
+const obtenerMiId = async () => {
+  const sesion = await obtenerSesion();
+
+  return sesion.usuarioId;
+};
+
+export const solicitudService = {
+  TAMANIO_PAGINA,
+  obtenerMiId,
+  obtenerSolicitudPorId,
+  obtenerSolicitudesCliente,
+  obtenerSolicitudesTrabajador,
+  obtenerMisSolicitudesCliente,
+  obtenerMisSolicitudesTrabajador,
+  obtenerSolicitudesClientePaginadas,
+  obtenerSolicitudesTrabajadorPaginadas,
+  crearSolicitud,
+  aceptarSolicitud,
+  rechazarSolicitud,
+  iniciarSolicitud,
+  completarSolicitud,
+  cancelarSolicitud,
+};
+
+export default solicitudService;

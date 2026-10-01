@@ -1,503 +1,1214 @@
-import React, { useCallback, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  RefreshControl,
-  StatusBar,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { conversacionService } from '../../services/conversacionService';
+import React, {
+  useCallback,
+  useMemo,
+  useState,
+} from 'react';
 
-const formatearFecha = (valor) => {
-  if (!valor) {
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+
+import {
+  SafeAreaView,
+} from 'react-native-safe-area-context';
+
+import { Ionicons } from '@expo/vector-icons';
+
+import {
+  useFocusEffect,
+} from '@react-navigation/native';
+
+import { jwtDecode } from 'jwt-decode';
+
+import {
+  conversacionService,
+} from '../../services/conversacionService';
+
+import {
+  mensajeService,
+} from '../../services/mensajeService';
+
+import {
+  userService,
+} from '../../services/userService';
+
+import {
+  perfilTrabajadorService,
+} from '../../services/perfilTrabajadorService';
+
+import {
+  secureStorage,
+} from '../../storage/secureStorage';
+
+const obtenerMiId = async () => {
+  const token =
+    await secureStorage.obtenerToken();
+
+  if (!token) {
+    throw new Error(
+      'No existe una sesión activa.'
+    );
+  }
+
+  const payload = jwtDecode(token);
+
+  const valor =
+    payload?.sub ??
+    payload?.nameid ??
+    payload?.id ??
+    payload?.userId ??
+    payload?.usuarioId ??
+    payload?.[
+      'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'
+    ];
+
+  const id = Number(valor);
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    throw new Error(
+      'No se pudo identificar al usuario.'
+    );
+  }
+
+  return id;
+};
+
+const obtenerMensajeError = (error) => {
+  const data = error?.response?.data;
+
+  if (typeof data === 'string') {
+    return data;
+  }
+
+  return (
+    data?.message ||
+    data?.mensaje ||
+    data?.error ||
+    error?.message ||
+    'No fue posible cargar las conversaciones.'
+  );
+};
+
+const formatearFecha = (fecha) => {
+  if (!fecha) {
     return '';
   }
 
-  const fecha = new Date(valor);
+  const valor = new Date(fecha);
 
-  if (Number.isNaN(fecha.getTime())) {
-    return String(valor);
+  if (Number.isNaN(valor.getTime())) {
+    return '';
   }
 
-  const ahora = new Date();
-  const mismoDia = fecha.toDateString() === ahora.toDateString();
+  const hoy = new Date();
 
-  if (mismoDia) {
-    return fecha.toLocaleTimeString('es-SV', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  if (
+    valor.toDateString() ===
+    hoy.toDateString()
+  ) {
+    return 'Hoy';
   }
 
-  return fecha.toLocaleDateString('es-SV', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  const ayer = new Date();
+
+  ayer.setDate(
+    ayer.getDate() - 1
+  );
+
+  if (
+    valor.toDateString() ===
+    ayer.toDateString()
+  ) {
+    return 'Ayer';
+  }
+
+  return valor.toLocaleDateString(
+    'es-SV',
+    {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }
+  );
 };
 
-export default function ConversacionesScreen({ navigation }) {
-  const [conversaciones, setConversaciones] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [actualizando, setActualizando] = useState(false);
-  const [error, setError] = useState(null);
+export default function ConversacionesScreen({
+  navigation,
+}) {
+  const [
+    conversaciones,
+    setConversaciones,
+  ] = useState([]);
 
-  const cargarConversaciones = useCallback(async () => {
-    try {
-      setError(null);
+  const [
+    usuarioId,
+    setUsuarioId,
+  ] = useState(null);
 
-      const resultado = await conversacionService.listar();
+  const [
+    usuarios,
+    setUsuarios,
+  ] = useState({});
 
-      setConversaciones(resultado);
-    } catch (excepcion) {
-      setError(
-        excepcion.message ||
-          'No se pudieron cargar tus conversaciones.'
-      );
-    } finally {
-      setCargando(false);
-      setActualizando(false);
-    }
-  }, []);
+  const [
+    fotos,
+    setFotos,
+  ] = useState({});
 
-  const refrescar = useCallback(async () => {
-    setActualizando(true);
-    await cargarConversaciones();
-  }, [cargarConversaciones]);
+  const [
+    noLeidos,
+    setNoLeidos,
+  ] = useState({});
 
-  React.useEffect(() => {
-    const unsubscribe = navigation.addListener(
-      'focus',
-      () => {
+  const [
+    busqueda,
+    setBusqueda,
+  ] = useState('');
+
+  const [
+    cargando,
+    setCargando,
+  ] = useState(true);
+
+  const [
+    refrescando,
+    setRefrescando,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState('');
+
+  const cargar = useCallback(
+    async (esRefresh = false) => {
+      if (esRefresh) {
+        setRefrescando(true);
+      } else {
         setCargando(true);
-        cargarConversaciones();
+      }
+
+      setError('');
+
+      try {
+        const miId =
+          await obtenerMiId();
+
+        const pagina =
+          await conversacionService
+            .obtenerConversacionesPaginadas({
+              pagina: 0,
+              tamanio: 100,
+            });
+
+        const lista =
+          pagina?.contenido ?? [];
+
+        setUsuarioId(miId);
+        setConversaciones(lista);
+
+        const idsOtrosUsuarios = [
+          ...new Set(
+            lista
+              .map((conversacion) =>
+                Number(
+                  conversacion.clienteId
+                ) === Number(miId)
+                  ? Number(
+                      conversacion.trabajadorId
+                    )
+                  : Number(
+                      conversacion.clienteId
+                    )
+              )
+              .filter(
+                (id) =>
+                  Number.isInteger(id) &&
+                  id > 0
+              )
+          ),
+        ];
+
+        const idsTrabajadoresVisibles = [
+          ...new Set(
+            lista
+              .filter(
+                (conversacion) =>
+                  Number(
+                    conversacion.clienteId
+                  ) === Number(miId)
+              )
+              .map(
+                (conversacion) =>
+                  Number(
+                    conversacion.trabajadorId
+                  )
+              )
+              .filter(
+                (id) =>
+                  Number.isInteger(id) &&
+                  id > 0
+              )
+          ),
+        ];
+
+        const [
+          usuariosObtenidos,
+          conteos,
+          perfilesTrabajadores,
+        ] = await Promise.all([
+          userService
+            .obtenerUsuariosPorIds(
+              idsOtrosUsuarios
+            ),
+
+          Promise.all(
+            lista.map(
+              async (conversacion) => {
+                try {
+                  const cantidad =
+                    await mensajeService
+                      .contarNoLeidos(
+                        conversacion.id
+                      );
+
+                  return [
+                    conversacion.id,
+                    cantidad,
+                  ];
+                } catch {
+                  return [
+                    conversacion.id,
+                    0,
+                  ];
+                }
+              }
+            )
+          ),
+
+          Promise.all(
+            idsTrabajadoresVisibles.map(
+              async (trabajadorId) => {
+                try {
+                  const perfil =
+                    await perfilTrabajadorService
+                      .obtenerPerfilPorTrabajador(
+                        trabajadorId
+                      );
+
+                  return [
+                    trabajadorId,
+                    perfil?.fotoUrl ?? null,
+                  ];
+                } catch {
+                  return [
+                    trabajadorId,
+                    null,
+                  ];
+                }
+              }
+            )
+          ),
+        ]);
+
+        setUsuarios(
+          usuariosObtenidos ?? {}
+        );
+
+        const mapaConteos = {};
+
+        conteos.forEach(
+          ([id, cantidad]) => {
+            mapaConteos[id] =
+              cantidad;
+          }
+        );
+
+        setNoLeidos(mapaConteos);
+
+        const mapaFotos = {};
+
+        perfilesTrabajadores.forEach(
+          ([trabajadorId, fotoUrl]) => {
+            mapaFotos[trabajadorId] =
+              fotoUrl;
+          }
+        );
+
+        setFotos(mapaFotos);
+      } catch (err) {
+        setError(
+          obtenerMensajeError(err)
+        );
+      } finally {
+        setCargando(false);
+        setRefrescando(false);
+      }
+    },
+    []
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      cargar();
+    }, [cargar])
+  );
+
+  const conversacionesFiltradas =
+    useMemo(() => {
+      const texto =
+        busqueda
+          .trim()
+          .toLowerCase();
+
+      if (!texto) {
+        return conversaciones;
+      }
+
+      return conversaciones.filter(
+        (conversacion) => {
+          const otroId =
+            Number(
+              conversacion.clienteId
+            ) === Number(usuarioId)
+              ? conversacion.trabajadorId
+              : conversacion.clienteId;
+
+          const nombre =
+            usuarios?.[otroId]
+              ?.nombre
+              ?.toLowerCase() ??
+            '';
+
+          const solicitud =
+            String(
+              conversacion.solicitudId ??
+                ''
+            );
+
+          return (
+            nombre.includes(texto) ||
+            solicitud.includes(texto)
+          );
+        }
+      );
+    }, [
+      conversaciones,
+      busqueda,
+      usuarioId,
+      usuarios,
+    ]);
+
+  const obtenerDatosConversacion = (
+    conversacion
+  ) => {
+    const soyCliente =
+      Number(
+        conversacion.clienteId
+      ) === Number(usuarioId);
+
+    const otroId =
+      soyCliente
+        ? Number(
+            conversacion.trabajadorId
+          )
+        : Number(
+            conversacion.clienteId
+          );
+
+    const nombre =
+      usuarios?.[otroId]?.nombre ??
+      (
+        soyCliente
+          ? `Trabajador #${otroId}`
+          : `Cliente #${otroId}`
+      );
+
+    const foto =
+      soyCliente
+        ? fotos?.[
+            Number(
+              conversacion.trabajadorId
+            )
+          ] ?? null
+        : null;
+
+    return {
+      soyCliente,
+      otroId,
+      nombre,
+      foto,
+    };
+  };
+
+  const abrirChat = (
+    conversacion
+  ) => {
+    const datos =
+      obtenerDatosConversacion(
+        conversacion
+      );
+
+    navigation.navigate(
+      'Chat',
+      {
+        conversacionId:
+          conversacion.id,
+        solicitudId:
+          conversacion.solicitudId,
+        nombreUsuario:
+          datos.nombre,
+        fotoUsuario:
+          datos.foto,
       }
     );
-
-    return unsubscribe;
-  }, [navigation, cargarConversaciones]);
-
-  const abrirChat = (conversacion) => {
-    navigation.navigate('Chat', {
-      conversacionId: conversacion.id,
-      solicitudId: conversacion.solicitudId,
-      interlocutor:
-        conversacion.interlocutorNombre ||
-        conversacion.clienteNombre ||
-        conversacion.trabajadorNombre,
-      soloLectura: Boolean(conversacion.soloLectura),
-    });
   };
 
-  const reintentar = () => {
-    setCargando(true);
-    setError(null);
-    cargarConversaciones();
-  };
-
-  const renderizarConversacion = ({ item }) => {
-    const sinLeer = Number(item.mensajesNoLeidos || 0) > 0;
-    const ultimoMensaje =
-      item.ultimoMensaje?.contenido ||
-      item.ultimoMensaje ||
-      'Sin mensajes todavia';
-
+  if (cargando) {
     return (
-      <TouchableOpacity
-        style={styles.tarjeta}
-        onPress={() => abrirChat(item)}
-        activeOpacity={0.8}
+      <SafeAreaView
+        style={styles.contenedor}
       >
         <View
-          style={[
-            styles.avatar,
-            sinLeer && styles.avatarSinLeer,
-          ]}
+          style={styles.encabezado}
         >
-          <Ionicons
-            name="person-outline"
-            size={22}
-            color={sinLeer ? '#FFFFFF' : '#0D9488'}
-          />
+          <Pressable
+            style={styles.botonVolver}
+            onPress={() =>
+              navigation.goBack()
+            }
+          >
+            <Ionicons
+              name="arrow-back"
+              size={24}
+              color="#101828"
+            />
+          </Pressable>
 
-          {sinLeer ? (
-            <View style={styles.contadorNoLeidos}>
-              <Text style={styles.contadorTexto}>
-                {item.mensajesNoLeidos > 99
-                  ? '99+'
-                  : item.mensajesNoLeidos}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.conversacionTexto}>
-          <View style={styles.conversacionEncabezado}>
+          <View
+            style={
+              styles.encabezadoTexto
+            }
+          >
             <Text
-              style={[
-                styles.interlocutor,
-                sinLeer && styles.interlocutorSinLeer,
-              ]}
-              numberOfLines={1}
+              style={styles.titulo}
             >
-              {item.interlocutorNombre ||
-                item.clienteNombre ||
-                item.trabajadorNombre ||
-                'Conversacion'}
+              Conversaciones
             </Text>
 
-            <Text style={styles.fecha}>
-              {formatearFecha(
-                item.ultimoMensaje?.fechaEnvio ||
-                  item.fechaActualizacion ||
-                  item.fechaCreacion
-              )}
+            <Text
+              style={styles.subtitulo}
+            >
+              Tus chats de servicios
             </Text>
           </View>
 
-          {item.solicitudId ? (
-            <Text style={styles.servicio}>
-              Solicitud #{String(item.solicitudId)}
-            </Text>
-          ) : null}
-
-          <Text
-            style={[
-              styles.ultimoMensaje,
-              sinLeer && styles.ultimoMensajeSinLeer,
-            ]}
-            numberOfLines={2}
-          >
-            {ultimoMensaje}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderizarVacio = () => (
-    <View style={styles.estadoVacio}>
-      <View style={styles.iconoVacio}>
-        <Ionicons
-          name="chatbubbles-outline"
-          size={38}
-          color="#0D9488"
-        />
-      </View>
-
-      <Text style={styles.tituloVacio}>
-        Todavia no tienes conversaciones
-      </Text>
-
-      <Text style={styles.textoVacio}>
-        Cuando un cliente o trabajador abra un chat sobre una
-        solicitud, aparecera aqui.
-      </Text>
-    </View>
-  );
-
-  const renderizarError = () => (
-    <View style={styles.estadoVacio}>
-      <View style={[styles.iconoVacio, styles.iconoError]}>
-        <Ionicons
-          name="cloud-offline-outline"
-          size={38}
-          color="#DC2626"
-        />
-      </View>
-
-      <Text style={styles.tituloVacio}>
-        No pudimos cargar tus conversaciones
-      </Text>
-
-      <Text style={styles.textoVacio}>
-        {error}
-      </Text>
-
-      <TouchableOpacity
-        style={styles.botonReintentar}
-        onPress={reintentar}
-        activeOpacity={0.85}
-      >
-        <Ionicons
-          name="refresh-outline"
-          size={18}
-          color="#FFFFFF"
-        />
-
-        <Text style={styles.textoBotonReintentar}>
-          Reintentar
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  return (
-    <SafeAreaView
-      style={styles.container}
-      edges={['top']}
-    >
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#12344D"
-      />
-
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.botonVolver}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="arrow-back-outline"
-            size={24}
-            color="#FFFFFF"
+          <View
+            style={styles.espacio}
           />
-        </TouchableOpacity>
-
-        <View style={styles.headerTexto}>
-          <Text style={styles.tituloHeader}>
-            Mis conversaciones
-          </Text>
-
-          <Text style={styles.subtituloHeader}>
-            Chats asociados a tus solicitudes
-          </Text>
         </View>
-      </View>
 
-      {cargando ? (
         <View style={styles.centro}>
           <ActivityIndicator
             size="large"
-            color="#0D9488"
           />
 
-          <Text style={styles.textoCarga}>
+          <Text
+            style={styles.textoCarga}
+          >
             Cargando conversaciones...
           </Text>
         </View>
-      ) : error ? (
-        renderizarError()
-      ) : (
-        <FlatList
-          style={styles.lista}
-          data={conversaciones}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderizarConversacion}
-          contentContainerStyle={
-            conversaciones.length === 0
-              ? styles.listaVacia
-              : styles.listaContenido
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView
+      style={styles.contenedor}
+    >
+      <View
+        style={styles.encabezado}
+      >
+        <Pressable
+          style={styles.botonVolver}
+          onPress={() =>
+            navigation.goBack()
           }
-          ListEmptyComponent={renderizarVacio}
-          showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => (
-            <View style={styles.separador} />
-          )}
-          refreshControl={
-            <RefreshControl
-              refreshing={actualizando}
-              onRefresh={refrescar}
-              colors={['#0D9488']}
-              tintColor="#0D9488"
-            />
+        >
+          <Ionicons
+            name="arrow-back"
+            size={24}
+            color="#101828"
+          />
+        </Pressable>
+
+        <View
+          style={
+            styles.encabezadoTexto
           }
+        >
+          <Text
+            style={styles.titulo}
+          >
+            Conversaciones
+          </Text>
+
+          <Text
+            style={styles.subtitulo}
+          >
+            Tus chats de servicios
+          </Text>
+        </View>
+
+        <View
+          style={styles.espacio}
         />
-      )}
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={
+          styles.contenido
+        }
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refrescando}
+            onRefresh={() =>
+              cargar(true)
+            }
+          />
+        }
+      >
+        <View style={styles.buscador}>
+          <Ionicons
+            name="search-outline"
+            size={21}
+            color="#667085"
+          />
+
+          <TextInput
+            style={
+              styles.inputBusqueda
+            }
+            value={busqueda}
+            onChangeText={setBusqueda}
+            placeholder="Buscar conversación..."
+            placeholderTextColor="#98A2B3"
+            returnKeyType="search"
+          />
+
+          {busqueda ? (
+            <Pressable
+              onPress={() =>
+                setBusqueda('')
+              }
+            >
+              <Ionicons
+                name="close-circle"
+                size={21}
+                color="#98A2B3"
+              />
+            </Pressable>
+          ) : null}
+        </View>
+
+        <View
+          style={
+            styles.resultadosCabecera
+          }
+        >
+          <Text
+            style={
+              styles.resultadosTitulo
+            }
+          >
+            Conversaciones
+          </Text>
+
+          {!error ? (
+            <Text
+              style={
+                styles.resultadosCantidad
+              }
+            >
+              {
+                conversacionesFiltradas.length
+              }
+            </Text>
+          ) : null}
+        </View>
+
+        {error ? (
+          <View
+            style={
+              styles.estadoContenedor
+            }
+          >
+            <Ionicons
+              name="alert-circle-outline"
+              size={45}
+              color="#B42318"
+            />
+
+            <Text
+              style={styles.estadoTitulo}
+            >
+              No pudimos cargar las conversaciones
+            </Text>
+
+            <Text
+              style={styles.estadoTexto}
+            >
+              {error}
+            </Text>
+
+            <Pressable
+              style={
+                styles.botonReintentar
+              }
+              onPress={() =>
+                cargar()
+              }
+            >
+              <Text
+                style={
+                  styles.botonReintentarTexto
+                }
+              >
+                Intentar nuevamente
+              </Text>
+            </Pressable>
+          </View>
+        ) : conversacionesFiltradas
+            .length === 0 ? (
+          <View
+            style={
+              styles.estadoContenedor
+            }
+          >
+            <Ionicons
+              name={
+                busqueda
+                  ? 'search-outline'
+                  : 'chatbubbles-outline'
+              }
+              size={45}
+              color="#98A2B3"
+            />
+
+            <Text
+              style={styles.estadoTitulo}
+            >
+              {busqueda
+                ? 'No encontramos conversaciones'
+                : 'No tienes conversaciones'}
+            </Text>
+
+            <Text
+              style={styles.estadoTexto}
+            >
+              {busqueda
+                ? 'Prueba con otro nombre o número de solicitud.'
+                : 'Tus conversaciones de servicios aparecerán aquí.'}
+            </Text>
+          </View>
+        ) : (
+          conversacionesFiltradas.map(
+            (conversacion) => {
+              const datos =
+                obtenerDatosConversacion(
+                  conversacion
+                );
+
+              const cantidad =
+                noLeidos[
+                  conversacion.id
+                ] ?? 0;
+
+              return (
+                <Pressable
+                  key={
+                    conversacion.id
+                  }
+                  style={
+                    styles.tarjeta
+                  }
+                  onPress={() =>
+                    abrirChat(
+                      conversacion
+                    )
+                  }
+                >
+                  <View
+                    style={
+                      styles.avatarContenedor
+                    }
+                  >
+                    {datos.foto ? (
+                      <Image
+                        source={{
+                          uri: datos.foto,
+                        }}
+                        style={
+                          styles.avatarFoto
+                        }
+                      />
+                    ) : (
+                      <View
+                        style={
+                          styles.avatarVacio
+                        }
+                      >
+                        <Ionicons
+                          name="person"
+                          size={22}
+                          color="#2563EB"
+                        />
+                      </View>
+                    )}
+
+                    {conversacion
+                      .puedeEnviarMensajes ? (
+                      <View
+                        style={
+                          styles.estadoPunto
+                        }
+                      />
+                    ) : null}
+                  </View>
+
+                  <View
+                    style={
+                      styles.tarjetaInformacion
+                    }
+                  >
+                    <View
+                      style={
+                        styles.tarjetaSuperior
+                      }
+                    >
+                      <Text
+                        style={
+                          styles.nombreUsuario
+                        }
+                        numberOfLines={1}
+                      >
+                        {datos.nombre}
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.fecha
+                        }
+                      >
+                        {formatearFecha(
+                          conversacion
+                            .fechaCreacion
+                        )}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.solicitudFila
+                      }
+                    >
+                      <Ionicons
+                        name="document-text-outline"
+                        size={14}
+                        color="#667085"
+                      />
+
+                      <Text
+                        style={
+                          styles.solicitudTexto
+                        }
+                        numberOfLines={1}
+                      >
+                        Solicitud #
+                        {
+                          conversacion
+                            .solicitudId
+                        }
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.tarjetaInferior
+                      }
+                    >
+                      <View
+                        style={[
+                          styles.estadoChat,
+                          conversacion
+                            .puedeEnviarMensajes
+                            ? styles.estadoChatActivo
+                            : styles.estadoChatLectura,
+                        ]}
+                      >
+                        <Ionicons
+                          name={
+                            conversacion
+                              .puedeEnviarMensajes
+                              ? 'chatbubble-ellipses-outline'
+                              : 'lock-closed-outline'
+                          }
+                          size={13}
+                          color={
+                            conversacion
+                              .puedeEnviarMensajes
+                              ? '#0D9488'
+                              : '#667085'
+                          }
+                        />
+
+                        <Text
+                          style={[
+                            styles.estadoChatTexto,
+                            conversacion
+                              .puedeEnviarMensajes
+                              ? styles.estadoChatTextoActivo
+                              : styles.estadoChatTextoLectura,
+                          ]}
+                        >
+                          {conversacion
+                            .puedeEnviarMensajes
+                            ? 'Chat activo'
+                            : 'Solo lectura'}
+                        </Text>
+                      </View>
+
+                      {cantidad > 0 ? (
+                        <View
+                          style={
+                            styles.noLeidos
+                          }
+                        >
+                          <Text
+                            style={
+                              styles.noLeidosTexto
+                            }
+                          >
+                            {cantidad > 99
+                              ? '99+'
+                              : cantidad}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <Ionicons
+                    name="chevron-forward"
+                    size={21}
+                    color="#98A2B3"
+                  />
+                </Pressable>
+              );
+            }
+          )
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  contenedor: {
     flex: 1,
-    backgroundColor: '#12344D',
+    backgroundColor: '#F8FAFC',
   },
-  header: {
-    backgroundColor: '#12344D',
+
+  encabezado: {
+    minHeight: 76,
+    paddingHorizontal: 18,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAECF0',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
   },
+
   botonVolver: {
     width: 44,
     height: 44,
-    borderRadius: 13,
-    backgroundColor: '#1E506B',
-    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
     alignItems: 'center',
-    marginRight: 13,
+    justifyContent: 'center',
   },
-  headerTexto: {
+
+  encabezadoTexto: {
+    flex: 1,
+    alignItems: 'center',
+  },
+
+  titulo: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#101828',
+  },
+
+  subtitulo: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#667085',
+  },
+
+  espacio: {
+    width: 44,
+  },
+
+  scroll: {
     flex: 1,
   },
-  tituloHeader: {
-    color: '#FFFFFF',
-    fontSize: 21,
-    fontWeight: '800',
+
+  contenido: {
+    padding: 18,
+    paddingBottom: 40,
   },
-  subtituloHeader: {
-    color: '#D6E4EC',
+
+  buscador: {
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  inputBusqueda: {
+    flex: 1,
+    marginHorizontal: 9,
+    fontSize: 15,
+    color: '#101828',
+  },
+
+  resultadosCabecera: {
+    marginTop: 25,
+    marginBottom: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  resultadosTitulo: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#101828',
+  },
+
+  resultadosCantidad: {
+    marginLeft: 8,
+    minWidth: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#E6F4F1',
+    color: '#0D9488',
+    textAlign: 'center',
+    textAlignVertical: 'center',
     fontSize: 12,
-    marginTop: 2,
+    fontWeight: '700',
+    paddingHorizontal: 6,
   },
+
+  tarjeta: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+    borderRadius: 17,
+    padding: 15,
+    marginBottom: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  avatarContenedor: {
+    width: 52,
+    height: 52,
+    marginRight: 12,
+    position: 'relative',
+  },
+
+  avatarFoto: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#F2F4F7',
+  },
+
+  avatarVacio: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  estadoPunto: {
+    position: 'absolute',
+    right: -1,
+    bottom: -1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#12B76A',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+
+  tarjetaInformacion: {
+    flex: 1,
+    marginRight: 8,
+  },
+
+  tarjetaSuperior: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  nombreUsuario: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#101828',
+    marginRight: 8,
+  },
+
+  fecha: {
+    fontSize: 10,
+    color: '#98A2B3',
+  },
+
+  solicitudFila: {
+    marginTop: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  solicitudTexto: {
+    marginLeft: 5,
+    fontSize: 12,
+    color: '#667085',
+  },
+
+  tarjetaInferior: {
+    marginTop: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  estadoChat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 18,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+
+  estadoChatActivo: {
+    backgroundColor: '#E6F4F1',
+  },
+
+  estadoChatLectura: {
+    backgroundColor: '#F2F4F7',
+  },
+
+  estadoChatTexto: {
+    marginLeft: 4,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+
+  estadoChatTextoActivo: {
+    color: '#0D9488',
+  },
+
+  estadoChatTextoLectura: {
+    color: '#667085',
+  },
+
+  noLeidos: {
+    minWidth: 23,
+    height: 23,
+    borderRadius: 12,
+    backgroundColor: '#0D9488',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    marginLeft: 8,
+  },
+
+  noLeidosTexto: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
   centro: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-    gap: 12,
   },
+
   textoCarga: {
-    color: '#64748B',
+    marginTop: 12,
+    color: '#667085',
     fontSize: 13,
   },
-  lista: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-  },
-  listaContenido: {
-    padding: 20,
-    paddingBottom: 36,
-  },
-  listaVacia: {
-    flexGrow: 1,
-  },
-  separador: {
-    height: 12,
-  },
-  tarjeta: {
+
+  estadoContenedor: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 50,
-    height: 50,
+    borderColor: '#EAECF0',
     borderRadius: 17,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
+    padding: 30,
     alignItems: 'center',
-    marginRight: 13,
   },
-  avatarSinLeer: {
-    backgroundColor: '#0D9488',
-  },
-  contadorNoLeidos: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    minWidth: 21,
-    height: 21,
-    borderRadius: 11,
-    backgroundColor: '#DC2626',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 5,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  contadorTexto: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  conversacionTexto: {
-    flex: 1,
-  },
-  conversacionEncabezado: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  interlocutor: {
-    color: '#172B3A',
-    fontSize: 14,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: 8,
-  },
-  interlocutorSinLeer: {
-    fontWeight: '800',
-  },
-  fecha: {
-    color: '#94A3B8',
-    fontSize: 11,
-  },
-  servicio: {
-    color: '#0D9488',
-    fontSize: 10,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  ultimoMensaje: {
-    color: '#64748B',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 3,
-  },
-  ultimoMensajeSinLeer: {
-    color: '#334155',
-    fontWeight: '700',
-  },
-  estadoVacio: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 34,
-  },
-  iconoVacio: {
-    width: 84,
-    height: 84,
-    borderRadius: 26,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  iconoError: {
-    backgroundColor: '#FEE2E2',
-  },
-  tituloVacio: {
-    color: '#172B3A',
+
+  estadoTitulo: {
+    marginTop: 13,
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: '700',
+    color: '#101828',
     textAlign: 'center',
   },
-  textoVacio: {
-    color: '#64748B',
+
+  estadoTexto: {
+    marginTop: 7,
     fontSize: 13,
     lineHeight: 19,
+    color: '#667085',
     textAlign: 'center',
-    marginTop: 7,
   },
+
   botonReintentar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: '#0D9488',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 13,
-    marginTop: 20,
+    marginTop: 18,
+    backgroundColor: '#2563EB',
+    borderRadius: 11,
+    paddingHorizontal: 17,
+    paddingVertical: 11,
   },
-  textoBotonReintentar: {
+
+  botonReintentarTexto: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });

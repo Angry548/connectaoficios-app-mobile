@@ -1,114 +1,346 @@
 import apiJava from './apiJava';
 
-/**
- * Endpoints del modulo de mensajeria.
- *
- * Nota: el controlador Mensaje (CON-128) aun no esta publicado en la
- * API Java. Las rutas siguen la convencion vigente del backend y se
- * centralizan aqui para ajustarse si difieren.
- */
-const RUTAS = {
-  base: '/api/mensajes',
-  conversacion: '/api/mensajes/conversacion/{conversacionId}',
-  marcarLeido: '/api/mensajes/{id}/leer',
+const TAMANIO_PAGINA = 20;
+const MAXIMO_CARACTERES = 2000;
+
+const normalizarMensaje = (mensaje) => {
+  if (!mensaje) {
+    return null;
+  }
+
+  return {
+    id:
+      mensaje.id ??
+      mensaje.idMensaje ??
+      null,
+
+    conversacionId:
+      mensaje.conversacionId ??
+      null,
+
+    remitenteId:
+      mensaje.remitenteId ??
+      null,
+
+    contenido:
+      mensaje.contenido ??
+      '',
+
+    fechaEnvio:
+      mensaje.fechaEnvio ??
+      null,
+
+    leido:
+      Boolean(mensaje.leido),
+  };
 };
 
-const obtenerMensajeError = (error, mensajeAlternativo) => {
-  return (
-    error?.response?.data?.message ||
-    error?.response?.data?.mensaje ||
-    error?.response?.data?.title ||
-    error?.response?.data?.detail ||
-    mensajeAlternativo
+const normalizarPagina = (
+  data,
+  paginaSolicitada = 0,
+  tamanioSolicitado = TAMANIO_PAGINA
+) => {
+  const contenido =
+    data?.contenido ??
+    data?.content ??
+    data?.items ??
+    [];
+
+  const pagina =
+    data?.pagina ??
+    data?.page ??
+    data?.number ??
+    paginaSolicitada;
+
+  const tamanio =
+    data?.tamanio ??
+    data?.size ??
+    data?.pageSize ??
+    tamanioSolicitado;
+
+  const totalElementos =
+    data?.totalElementos ??
+    data?.totalElements ??
+    data?.totalItems ??
+    contenido.length;
+
+  const totalPaginas =
+    data?.totalPaginas ??
+    data?.totalPages ??
+    (
+      totalElementos > 0
+        ? Math.ceil(
+            totalElementos / tamanio
+          )
+        : 0
+    );
+
+  return {
+    contenido: Array.isArray(contenido)
+      ? contenido
+          .map(normalizarMensaje)
+          .filter(Boolean)
+      : [],
+
+    pagina:
+      Number(pagina) || 0,
+
+    tamanio:
+      Number(tamanio) ||
+      tamanioSolicitado,
+
+    totalElementos:
+      Number(totalElementos) || 0,
+
+    totalPaginas:
+      Number(totalPaginas) || 0,
+
+    primera:
+      data?.primera ??
+      data?.first ??
+      Number(pagina) === 0,
+
+    ultima:
+      data?.ultima ??
+      data?.last ??
+      (
+        Number(totalPaginas) === 0 ||
+        Number(pagina) >=
+          Number(totalPaginas) - 1
+      ),
+
+    vacia:
+      data?.vacia ??
+      data?.empty ??
+      contenido.length === 0,
+  };
+};
+
+const enviarMensaje = async (
+  conversacionId,
+  contenido,
+  options = {}
+) => {
+  const id = Number(conversacionId);
+  const texto = contenido?.trim();
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    throw new Error(
+      'La conversación no es válida.'
+    );
+  }
+
+  if (!texto) {
+    throw new Error(
+      'Escribe un mensaje.'
+    );
+  }
+
+  if (
+    texto.length >
+    MAXIMO_CARACTERES
+  ) {
+    throw new Error(
+      `El mensaje no puede superar los ${MAXIMO_CARACTERES} caracteres.`
+    );
+  }
+
+  const response = await apiJava.post(
+    '/api/mensajes',
+    {
+      conversacionId: id,
+      contenido: texto,
+    },
+    options
+  );
+
+  return normalizarMensaje(
+    response.data
   );
 };
 
-export const mensajeService = {
-  /**
-   * Recupera el historial de mensajes de una conversacion en orden
-   * cronologico.
-   */
-  listarPorConversacion: async (conversacionId) => {
-    try {
-      const response = await apiJava.get(
-        RUTAS.conversacion.replace(
-          '{conversacionId}',
-          String(conversacionId)
-        )
-      );
-      return Array.isArray(response.data) ? response.data : [];
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudo cargar el historial de mensajes.'
-        )
-      );
-    }
-  },
+const obtenerMensajesPorConversacion = async (
+  conversacionId,
+  options = {}
+) => {
+  const id = Number(conversacionId);
 
-  /**
-   * Envia un mensaje dentro de una conversacion.
-   */
-  enviar: async (conversacionId, contenido) => {
-    try {
-      const response = await apiJava.post(RUTAS.base, {
-        conversacionId: Number(conversacionId),
-        contenido: contenido.trim(),
-      });
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    throw new Error(
+      'La conversación no es válida.'
+    );
+  }
 
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudo enviar el mensaje.'
-        )
-      );
-    }
-  },
+  const response = await apiJava.get(
+    `/api/mensajes/conversacion/${id}`,
+    options
+  );
 
-  /**
-   * Marca un mensaje como leido.
-   */
-  marcarLeido: async (mensajeId) => {
-    try {
-      const response = await apiJava.put(
-        RUTAS.marcarLeido.replace(
-          '{id}',
-          String(mensajeId)
-        )
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudo marcar el mensaje como leído.'
-        )
-      );
-    }
-  },
+  const data = Array.isArray(response.data)
+    ? response.data
+    : [];
 
-  /**
-   * Marca todos los mensajes de una conversacion como leidos.
-   */
-  marcarConversacionLeida: async (conversacionId) => {
-    try {
-      const response = await apiJava.put(
-        `${RUTAS.conversacion.replace(
-          '{conversacionId}',
-          String(conversacionId)
-        )}/leer`
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudo marcar la conversación como leída.'
-        )
-      );
-    }
-  },
+  return data
+    .map(normalizarMensaje)
+    .filter(Boolean);
 };
+
+const obtenerMensajesPaginados = async (
+  conversacionId,
+  {
+    pagina = 0,
+    tamanio = TAMANIO_PAGINA,
+    remitenteId = null,
+    leido = null,
+    texto = null,
+    fechaDesde = null,
+    fechaHasta = null,
+  } = {},
+  options = {}
+) => {
+  const id = Number(conversacionId);
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    throw new Error(
+      'La conversación no es válida.'
+    );
+  }
+
+  const params = {
+    page: pagina,
+    size: tamanio,
+  };
+
+  if (remitenteId) {
+    params.remitenteId =
+      remitenteId;
+  }
+
+  if (
+    leido !== null &&
+    leido !== undefined
+  ) {
+    params.leido = leido;
+  }
+
+  if (texto?.trim()) {
+    params.texto =
+      texto.trim();
+  }
+
+  if (fechaDesde) {
+    params.fechaDesde =
+      fechaDesde;
+  }
+
+  if (fechaHasta) {
+    params.fechaHasta =
+      fechaHasta;
+  }
+
+  const response = await apiJava.get(
+    `/api/mensajes/conversacion/${id}/paginados`,
+    {
+      ...options,
+      params: {
+        ...params,
+        ...(options.params ?? {}),
+      },
+    }
+  );
+
+  return normalizarPagina(
+    response.data,
+    pagina,
+    tamanio
+  );
+};
+
+const marcarComoLeido = async (
+  mensajeId,
+  options = {}
+) => {
+  const id = Number(mensajeId);
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    return;
+  }
+
+  await apiJava.put(
+    `/api/mensajes/${id}/leido`,
+    null,
+    options
+  );
+};
+
+const marcarMensajesRecibidosComoLeidos = async (
+  mensajes,
+  usuarioId
+) => {
+  const pendientes = (
+    Array.isArray(mensajes)
+      ? mensajes
+      : []
+  ).filter(
+    (mensaje) =>
+      mensaje?.id &&
+      !mensaje.leido &&
+      Number(mensaje.remitenteId) !==
+        Number(usuarioId)
+  );
+
+  await Promise.allSettled(
+    pendientes.map(
+      (mensaje) =>
+        marcarComoLeido(
+          mensaje.id
+        )
+    )
+  );
+};
+
+const contarNoLeidos = async (
+  conversacionId,
+  options = {}
+) => {
+  const id = Number(conversacionId);
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    return 0;
+  }
+
+  const response = await apiJava.get(
+    `/api/mensajes/conversacion/${id}/no-leidos`,
+    options
+  );
+
+  return Number(response.data) || 0;
+};
+
+export const mensajeService = {
+  TAMANIO_PAGINA,
+  MAXIMO_CARACTERES,
+  enviarMensaje,
+  obtenerMensajesPorConversacion,
+  obtenerMensajesPaginados,
+  marcarComoLeido,
+  marcarMensajesRecibidosComoLeidos,
+  contarNoLeidos,
+};
+
+export default mensajeService;

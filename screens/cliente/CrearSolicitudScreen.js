@@ -1,86 +1,351 @@
-import React, { useState } from 'react';
+import React, {
+  useMemo,
+  useState,
+} from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Alert,
-  StatusBar,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+} from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { solicitudService } from '../../services/solicitudService';
+import {
+  solicitudService,
+} from '../../services/solicitudService';
 
-const HORAS = Array.from({ length: 24 }, (_, i) =>
-  `${String(i).padStart(2, '0')}:00`
-);
+const obtenerFechaMinima = () => {
+  const hoy = new Date();
 
-export default function CrearSolicitudScreen({ navigation, route }) {
-  const servicio = route?.params?.servicio;
+  const anio = hoy.getFullYear();
+  const mes = String(
+    hoy.getMonth() + 1
+  ).padStart(2, '0');
+  const dia = String(
+    hoy.getDate()
+  ).padStart(2, '0');
 
-  const [fechaPropuesta, setFechaPropuesta] = useState('');
-  const [horaAproximada, setHoraAproximada] = useState('09:00');
-  const [direccion, setDireccion] = useState('');
-  const [descripcionTrabajo, setDescripcionTrabajo] = useState('');
-  const [enviando, setEnviando] = useState(false);
+  return `${anio}-${mes}-${dia}`;
+};
 
-  const limpiarFormulario = () => {
-    setFechaPropuesta('');
-    setHoraAproximada('09:00');
-    setDireccion('');
-    setDescripcionTrabajo('');
+const validarFecha = (fecha) => {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(fecha)
+  ) {
+    return false;
+  }
+
+  const [
+    anio,
+    mes,
+    dia,
+  ] = fecha.split('-').map(Number);
+
+  const fechaCreada = new Date(
+    anio,
+    mes - 1,
+    dia
+  );
+
+  return (
+    fechaCreada.getFullYear() === anio &&
+    fechaCreada.getMonth() ===
+      mes - 1 &&
+    fechaCreada.getDate() === dia
+  );
+};
+
+const validarHora = (hora) => {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(
+    hora
+  );
+};
+
+export default function CrearSolicitudScreen({
+  route,
+  navigation,
+}) {
+  const servicioId =
+    route?.params?.servicioId;
+
+  const trabajadorId =
+    route?.params?.trabajadorId;
+
+  const perfilTrabajadorId =
+    route?.params?.perfilTrabajadorId;
+
+  const servicioTitulo =
+    route?.params?.servicioTitulo ||
+    'Servicio';
+
+  const trabajadorNombre =
+    route?.params?.trabajadorNombre ||
+    'Trabajador';
+
+  const [fechaPropuesta, setFechaPropuesta] =
+    useState('');
+
+  const [
+    horaAproximada,
+    setHoraAproximada,
+  ] = useState('');
+
+  const [
+    direccionServicio,
+    setDireccionServicio,
+  ] = useState('');
+
+  const [
+    descripcionTrabajo,
+    setDescripcionTrabajo,
+  ] = useState('');
+
+  const [enviando, setEnviando] =
+    useState(false);
+
+  const fechaMinima = useMemo(
+    () => obtenerFechaMinima(),
+    []
+  );
+
+  const formularioValido = useMemo(() => {
+    return (
+      fechaPropuesta.trim().length > 0 &&
+      horaAproximada.trim().length > 0 &&
+      direccionServicio.trim().length > 0 &&
+      descripcionTrabajo.trim().length > 0 &&
+      !enviando
+    );
+  }, [
+    fechaPropuesta,
+    horaAproximada,
+    direccionServicio,
+    descripcionTrabajo,
+    enviando,
+  ]);
+
+  const formatearFecha = (texto) => {
+    const soloNumeros = texto.replace(
+      /\D/g,
+      ''
+    );
+
+    let resultado =
+      soloNumeros.substring(0, 4);
+
+    if (soloNumeros.length > 4) {
+      resultado += `-${soloNumeros.substring(
+        4,
+        6
+      )}`;
+    }
+
+    if (soloNumeros.length > 6) {
+      resultado += `-${soloNumeros.substring(
+        6,
+        8
+      )}`;
+    }
+
+    setFechaPropuesta(resultado);
+  };
+
+  const formatearHora = (texto) => {
+    const soloNumeros = texto.replace(
+      /\D/g,
+      ''
+    );
+
+    let resultado =
+      soloNumeros.substring(0, 2);
+
+    if (soloNumeros.length > 2) {
+      resultado += `:${soloNumeros.substring(
+        2,
+        4
+      )}`;
+    }
+
+    setHoraAproximada(resultado);
+  };
+
+  const obtenerMensajeError = (err) => {
+    const data = err?.response?.data;
+
+    if (typeof data === 'string') {
+      return data;
+    }
+
+    if (
+      data?.message ||
+      data?.mensaje ||
+      data?.error
+    ) {
+      return (
+        data.message ||
+        data.mensaje ||
+        data.error
+      );
+    }
+
+    if (
+      data &&
+      typeof data === 'object'
+    ) {
+      const primerValor =
+        Object.values(data)[0];
+
+      if (Array.isArray(primerValor)) {
+        return (
+          primerValor[0] ||
+          'No se pudo registrar la solicitud.'
+        );
+      }
+
+      if (
+        typeof primerValor === 'string'
+      ) {
+        return primerValor;
+      }
+    }
+
+    return (
+      err?.message ||
+      'No se pudo registrar la solicitud.'
+    );
   };
 
   const validarFormulario = () => {
-    if (!fechaPropuesta.trim()) {
-      Alert.alert(
-        'Fecha requerida',
-        'Indica la fecha en la que necesitas el servicio.'
-      );
-      return false;
-    }
-
-    if (!horaAproximada) {
-      Alert.alert(
-        'Hora requerida',
-        'Selecciona la hora aproximada.'
-      );
-      return false;
-    }
-
-    if (!direccion.trim()) {
-      Alert.alert(
-        'Direccion requerida',
-        'Ingresa la direccion donde se realizara el trabajo.'
-      );
-      return false;
-    }
-
-    if (!descripcionTrabajo.trim()) {
-      Alert.alert(
-        'Descripcion requerida',
-        'Describe el trabajo que necesitas.'
-      );
-      return false;
-    }
-
-    if (!servicio?.id) {
+    if (!servicioId) {
       Alert.alert(
         'Servicio no disponible',
-        'No fue posible identificar el servicio solicitado.'
+        'No se recibió el identificador del servicio.'
       );
+
+      return false;
+    }
+
+    if (!trabajadorId) {
+      Alert.alert(
+        'Trabajador no disponible',
+        'No se pudo identificar al trabajador que ofrece este servicio.'
+      );
+
+      return false;
+    }
+
+    const fecha =
+      fechaPropuesta.trim();
+
+    const hora =
+      horaAproximada.trim();
+
+    const direccion =
+      direccionServicio.trim();
+
+    const descripcion =
+      descripcionTrabajo.trim();
+
+    if (!fecha) {
+      Alert.alert(
+        'Fecha requerida',
+        'Ingresa la fecha propuesta para realizar el servicio.'
+      );
+
+      return false;
+    }
+
+    if (!validarFecha(fecha)) {
+      Alert.alert(
+        'Fecha no válida',
+        'Ingresa la fecha con el formato AAAA-MM-DD.'
+      );
+
+      return false;
+    }
+
+    if (fecha < fechaMinima) {
+      Alert.alert(
+        'Fecha no válida',
+        'La fecha propuesta no puede ser anterior a la fecha actual.'
+      );
+
+      return false;
+    }
+
+    if (!hora) {
+      Alert.alert(
+        'Hora requerida',
+        'Ingresa una hora aproximada para el servicio.'
+      );
+
+      return false;
+    }
+
+    if (!validarHora(hora)) {
+      Alert.alert(
+        'Hora no válida',
+        'Ingresa la hora con el formato HH:MM.'
+      );
+
+      return false;
+    }
+
+    if (!direccion) {
+      Alert.alert(
+        'Dirección requerida',
+        'Ingresa la dirección donde se realizará el servicio.'
+      );
+
+      return false;
+    }
+
+    if (direccion.length > 255) {
+      Alert.alert(
+        'Dirección demasiado larga',
+        'La dirección no puede superar los 255 caracteres.'
+      );
+
+      return false;
+    }
+
+    if (!descripcion) {
+      Alert.alert(
+        'Descripción requerida',
+        'Describe brevemente el trabajo que necesitas.'
+      );
+
+      return false;
+    }
+
+    if (descripcion.length > 1000) {
+      Alert.alert(
+        'Descripción demasiado larga',
+        'La descripción no puede superar los 1000 caracteres.'
+      );
+
       return false;
     }
 
     return true;
   };
 
-  const registrarSolicitud = async () => {
+  const enviarSolicitud = async () => {
+    if (enviando) {
+      return;
+    }
+
+    Keyboard.dismiss();
+
     if (!validarFormulario()) {
       return;
     }
@@ -88,32 +353,60 @@ export default function CrearSolicitudScreen({ navigation, route }) {
     setEnviando(true);
 
     try {
-      await solicitudService.crear({
-        servicioId: servicio.id,
-        fechaPropuesta: fechaPropuesta.trim(),
-        horaAproximada,
-        direccion,
-        descripcionTrabajo,
-      });
+      const clienteId =
+        await solicitudService.obtenerMiId();
 
-      limpiarFormulario();
+      const datos = {
+        servicioId: Number(servicioId),
+        clienteId: Number(clienteId),
+        trabajadorId: Number(
+          trabajadorId
+        ),
+        fechaPropuesta:
+          fechaPropuesta.trim(),
+        horaAproximada:
+          `${horaAproximada.trim()}:00`,
+        direccionServicio:
+          direccionServicio.trim(),
+        descripcionTrabajo:
+          descripcionTrabajo.trim(),
+      };
+
+      const solicitudCreada =
+        await solicitudService.crearSolicitud(
+          datos
+        );
 
       Alert.alert(
         'Solicitud enviada',
-        'Tu solicitud se registro en estado Pendiente. El trabajador sera notificado.',
+        'Tu solicitud fue enviada correctamente al trabajador.',
         [
           {
-            text: 'Ver mis solicitudes',
-            onPress: () =>
-              navigation.navigate('MisSolicitudes'),
+            text: 'Ver solicitud',
+            onPress: () => {
+              navigation.replace(
+                'DetalleSolicitudCliente',
+                {
+                  solicitudId:
+                    solicitudCreada.idSolicitud,
+                }
+              );
+            },
+          },
+          {
+            text: 'Mis solicitudes',
+            onPress: () => {
+              navigation.navigate(
+                'MisSolicitudes'
+              );
+            },
           },
         ]
       );
-    } catch (error) {
+    } catch (err) {
       Alert.alert(
-        'No se pudo enviar la solicitud',
-        error.message ||
-          'Inténtalo nuevamente en unos instantes.'
+        'No se pudo enviar',
+        obtenerMensajeError(err)
       );
     } finally {
       setEnviando(false);
@@ -121,168 +414,412 @@ export default function CrearSolicitudScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView
-      style={styles.container}
-      edges={['top']}
-    >
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#12344D"
-      />
-
-      <View style={styles.header}>
-        <TouchableOpacity
+    <SafeAreaView style={styles.contenedor}>
+      <View style={styles.encabezado}>
+        <Pressable
           style={styles.botonVolver}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
+          onPress={() =>
+            navigation.goBack()
+          }
+          disabled={enviando}
         >
           <Ionicons
-            name="arrow-back-outline"
-            size={24}
-            color="#FFFFFF"
+            name="arrow-back"
+            size={23}
+            color="#101828"
           />
-        </TouchableOpacity>
+        </Pressable>
 
-        <View style={styles.headerTexto}>
-          <Text style={styles.tituloHeader}>
-            Nueva solicitud
+        <View style={styles.encabezadoTexto}>
+          <Text style={styles.titulo}>
+            Solicitar servicio
           </Text>
 
-          <Text style={styles.subtituloHeader}>
-            Describe el trabajo que necesitas
+          <Text style={styles.subtitulo}>
+            Completa los datos de tu solicitud
           </Text>
         </View>
+
+        <View style={styles.espacio} />
       </View>
 
       <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+        behavior={
+          Platform.OS === 'ios'
+            ? 'padding'
+            : undefined
+        }
       >
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.contenido}
+          contentContainerStyle={
+            styles.contenido
+          }
           keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.tarjetaServicio}>
-            <View style={styles.iconoServicio}>
+          <View style={styles.resumen}>
+            <View
+              style={styles.resumenIcono}
+            >
               <Ionicons
-                name="briefcase-outline"
-                size={22}
-                color="#0D9488"
+                name="construct-outline"
+                size={27}
+                color="#FFFFFF"
               />
             </View>
 
-            <View style={styles.servicioTexto}>
-              <Text style={styles.servicioTitulo}>
-                {servicio?.nombre ||
-                  'Servicio seleccionado'}
+            <View
+              style={styles.resumenContenido}
+            >
+              <Text
+                style={styles.resumenEtiqueta}
+              >
+                Servicio solicitado
               </Text>
 
-              <Text style={styles.servicioDescripcion}>
-                {servicio?.descripcion ||
-                  'Completa los datos para enviar tu solicitud.'}
+              <Text
+                style={styles.resumenTitulo}
+              >
+                {servicioTitulo}
               </Text>
+
+              <View
+                style={
+                  styles.trabajadorFila
+                }
+              >
+                <Ionicons
+                  name="person-outline"
+                  size={15}
+                  color="#D6E4EC"
+                />
+
+                <Text
+                  style={
+                    styles.trabajadorTexto
+                  }
+                >
+                  {trabajadorNombre}
+                </Text>
+              </View>
             </View>
           </View>
 
           <View style={styles.tarjeta}>
-            <Text style={styles.label}>
+            <View
+              style={styles.seccionTituloFila}
+            >
+              <View
+                style={styles.iconoSeccion}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={21}
+                  color="#2563EB"
+                />
+              </View>
+
+              <View>
+                <Text
+                  style={styles.seccionTitulo}
+                >
+                  Fecha y hora
+                </Text>
+
+                <Text
+                  style={
+                    styles.seccionSubtitulo
+                  }
+                >
+                  Indica cuándo necesitas el servicio
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.etiqueta}>
               Fecha propuesta
             </Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="2026-03-15"
-              placeholderTextColor="#94A3B8"
-              value={fechaPropuesta}
-              onChangeText={setFechaPropuesta}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!enviando}
-            />
+            <View
+              style={styles.campoContenedor}
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={20}
+                color="#667085"
+              />
 
-            <Text style={styles.label}>
+              <TextInput
+                style={styles.campo}
+                value={fechaPropuesta}
+                onChangeText={formatearFecha}
+                placeholder="AAAA-MM-DD"
+                placeholderTextColor="#98A2B3"
+                keyboardType="number-pad"
+                maxLength={10}
+                editable={!enviando}
+              />
+            </View>
+
+            <Text style={styles.ayuda}>
+              Fecha mínima: {fechaMinima}
+            </Text>
+
+            <Text
+              style={[
+                styles.etiqueta,
+                styles.etiquetaSeparada,
+              ]}
+            >
               Hora aproximada
             </Text>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horasFila}
+            <View
+              style={styles.campoContenedor}
             >
-              {HORAS.map((hora) => (
-                <TouchableOpacity
-                  key={hora}
-                  style={[
-                    styles.hora,
-                    horaAproximada === hora &&
-                      styles.horaSeleccionada,
-                  ]}
-                  onPress={() => setHoraAproximada(hora)}
-                  disabled={enviando}
-                  activeOpacity={0.8}
+              <Ionicons
+                name="time-outline"
+                size={20}
+                color="#667085"
+              />
+
+              <TextInput
+                style={styles.campo}
+                value={horaAproximada}
+                onChangeText={formatearHora}
+                placeholder="HH:MM"
+                placeholderTextColor="#98A2B3"
+                keyboardType="number-pad"
+                maxLength={5}
+                editable={!enviando}
+              />
+            </View>
+
+            <Text style={styles.ayuda}>
+              Ejemplo: 14:30
+            </Text>
+          </View>
+
+          <View style={styles.tarjeta}>
+            <View
+              style={styles.seccionTituloFila}
+            >
+              <View
+                style={styles.iconoSeccion}
+              >
+                <Ionicons
+                  name="location-outline"
+                  size={21}
+                  color="#2563EB"
+                />
+              </View>
+
+              <View style={styles.flex}>
+                <Text
+                  style={styles.seccionTitulo}
                 >
-                  <Text
-                    style={[
-                      styles.horaTexto,
-                      horaAproximada === hora &&
-                        styles.horaTextoSeleccionado,
-                    ]}
-                  >
-                    {hora}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                  Lugar del servicio
+                </Text>
 
-            <Text style={styles.label}>
-              Direccion
+                <Text
+                  style={
+                    styles.seccionSubtitulo
+                  }
+                >
+                  Indica dónde debe realizarse
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.etiqueta}>
+              Dirección
             </Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Colonia, calle y numero"
-              placeholderTextColor="#94A3B8"
-              value={direccion}
-              onChangeText={setDireccion}
-              editable={!enviando}
-            />
-
-            <Text style={styles.label}>
-              Descripcion del trabajo
-            </Text>
-
-            <TextInput
-              style={[styles.input, styles.inputMultilinea]}
-              placeholder="Detalla lo que necesitas"
-              placeholderTextColor="#94A3B8"
-              value={descripcionTrabajo}
-              onChangeText={setDescripcionTrabajo}
-              multiline
-              numberOfLines={5}
-              textAlignVertical="top"
-              editable={!enviando}
-            />
-
-            <TouchableOpacity
+            <View
               style={[
-                styles.boton,
-                enviando && styles.botonDeshabilitado,
+                styles.campoContenedor,
+                styles.campoMultilinea,
               ]}
-              onPress={registrarSolicitud}
-              disabled={enviando}
-              activeOpacity={0.85}
             >
-              {enviando ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.textoBoton}>
+              <Ionicons
+                name="location-outline"
+                size={20}
+                color="#667085"
+                style={
+                  styles.iconoMultilinea
+                }
+              />
+
+              <TextInput
+                style={[
+                  styles.campo,
+                  styles.textoMultilinea,
+                ]}
+                value={direccionServicio}
+                onChangeText={
+                  setDireccionServicio
+                }
+                placeholder="Ej. Colonia, calle, número de casa y referencias"
+                placeholderTextColor="#98A2B3"
+                multiline
+                maxLength={255}
+                editable={!enviando}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <Text
+              style={styles.contadorCaracteres}
+            >
+              {direccionServicio.length}/255
+            </Text>
+          </View>
+
+          <View style={styles.tarjeta}>
+            <View
+              style={styles.seccionTituloFila}
+            >
+              <View
+                style={styles.iconoSeccion}
+              >
+                <Ionicons
+                  name="document-text-outline"
+                  size={21}
+                  color="#2563EB"
+                />
+              </View>
+
+              <View style={styles.flex}>
+                <Text
+                  style={styles.seccionTitulo}
+                >
+                  Trabajo requerido
+                </Text>
+
+                <Text
+                  style={
+                    styles.seccionSubtitulo
+                  }
+                >
+                  Explica qué necesitas realizar
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.etiqueta}>
+              Descripción del trabajo
+            </Text>
+
+            <View
+              style={[
+                styles.campoContenedor,
+                styles.campoDescripcion,
+              ]}
+            >
+              <TextInput
+                style={[
+                  styles.campo,
+                  styles.textoDescripcion,
+                ]}
+                value={descripcionTrabajo}
+                onChangeText={
+                  setDescripcionTrabajo
+                }
+                placeholder="Describe el problema, trabajo o servicio que necesitas..."
+                placeholderTextColor="#98A2B3"
+                multiline
+                maxLength={1000}
+                editable={!enviando}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <Text
+              style={styles.contadorCaracteres}
+            >
+              {descripcionTrabajo.length}/1000
+            </Text>
+          </View>
+
+          <View style={styles.aviso}>
+            <Ionicons
+              name="information-circle-outline"
+              size={23}
+              color="#2563EB"
+            />
+
+            <Text style={styles.avisoTexto}>
+              El trabajador recibirá tu solicitud y podrá aceptarla o rechazarla. Podrás consultar su estado desde Mis solicitudes.
+            </Text>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.botonEnviar,
+              (!formularioValido ||
+                enviando) &&
+                styles.botonEnviarDeshabilitado,
+              pressed &&
+                formularioValido &&
+                !enviando &&
+                styles.botonEnviarPresionado,
+            ]}
+            onPress={enviarSolicitud}
+            disabled={
+              !formularioValido ||
+              enviando
+            }
+          >
+            {enviando ? (
+              <>
+                <ActivityIndicator
+                  size="small"
+                  color="#FFFFFF"
+                />
+
+                <Text
+                  style={
+                    styles.botonEnviarTexto
+                  }
+                >
+                  Enviando solicitud...
+                </Text>
+              </>
+            ) : (
+              <>
+                <Ionicons
+                  name="paper-plane-outline"
+                  size={21}
+                  color="#FFFFFF"
+                />
+
+                <Text
+                  style={
+                    styles.botonEnviarTexto
+                  }
+                >
                   Enviar solicitud
                 </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={styles.botonCancelar}
+            onPress={() =>
+              navigation.goBack()
+            }
+            disabled={enviando}
+          >
+            <Text
+              style={styles.botonCancelarTexto}
+            >
+              Cancelar
+            </Text>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -290,150 +827,235 @@ export default function CrearSolicitudScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  flex: {
     flex: 1,
-    backgroundColor: '#12344D',
   },
-  header: {
-    backgroundColor: '#12344D',
+  contenedor: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  encabezado: {
+    minHeight: 76,
+    paddingHorizontal: 18,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAECF0',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
   },
   botonVolver: {
     width: 44,
     height: 44,
-    borderRadius: 13,
-    backgroundColor: '#1E506B',
-    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
     alignItems: 'center',
-    marginRight: 13,
+    justifyContent: 'center',
   },
-  headerTexto: {
+  encabezadoTexto: {
     flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
   },
-  tituloHeader: {
-    color: '#FFFFFF',
-    fontSize: 21,
-    fontWeight: '800',
+  titulo: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#101828',
   },
-  subtituloHeader: {
-    color: '#D6E4EC',
-    fontSize: 12,
+  subtitulo: {
     marginTop: 2,
+    fontSize: 11,
+    color: '#667085',
+    textAlign: 'center',
+  },
+  espacio: {
+    width: 44,
   },
   scroll: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
   },
   contenido: {
-    padding: 20,
-    paddingBottom: 36,
+    padding: 18,
+    paddingBottom: 45,
   },
-  tarjetaServicio: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 15,
+  resumen: {
+    backgroundColor: '#12344D',
+    borderRadius: 20,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  resumenIcono: {
+    width: 56,
+    height: 56,
+    borderRadius: 17,
+    backgroundColor: '#0D9488',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resumenContenido: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  resumenEtiqueta: {
+    fontSize: 11,
+    color: '#B8CBD7',
+    fontWeight: '600',
+  },
+  resumenTitulo: {
+    marginTop: 3,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  trabajadorFila: {
+    marginTop: 7,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  iconoServicio: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 13,
-  },
-  servicioTexto: {
-    flex: 1,
-  },
-  servicioTitulo: {
-    color: '#172B3A',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  servicioDescripcion: {
-    color: '#64748B',
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 3,
+  trabajadorTexto: {
+    marginLeft: 5,
+    fontSize: 12,
+    color: '#D6E4EC',
   },
   tarjeta: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 20,
-    marginTop: 14,
+    borderColor: '#EAECF0',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 14,
   },
-  label: {
-    color: '#334155',
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 7,
-  },
-  input: {
-    minHeight: 51,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    color: '#172B3A',
-    fontSize: 15,
-    marginBottom: 17,
-  },
-  inputMultilinea: {
-    minHeight: 116,
-    paddingTop: 13,
-    textAlignVertical: 'top',
-  },
-  horasFila: {
-    gap: 8,
-    paddingBottom: 17,
-  },
-  hora: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
-  },
-  horaSeleccionada: {
-    backgroundColor: '#0D9488',
-    borderColor: '#0D9488',
-  },
-  horaTexto: {
-    color: '#334155',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  horaTextoSeleccionado: {
-    color: '#FFFFFF',
-  },
-  boton: {
-    minHeight: 54,
-    borderRadius: 13,
-    backgroundColor: '#0D9488',
-    justifyContent: 'center',
+  seccionTituloFila: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 3,
+    marginBottom: 19,
   },
-  botonDeshabilitado: {
-    opacity: 0.65,
+  iconoSeccion: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
   },
-  textoBoton: {
-    color: '#FFFFFF',
+  seccionTitulo: {
     fontSize: 16,
     fontWeight: '700',
+    color: '#101828',
+  },
+  seccionSubtitulo: {
+    marginTop: 2,
+    fontSize: 11,
+    color: '#667085',
+  },
+  etiqueta: {
+    marginBottom: 7,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#344054',
+  },
+  etiquetaSeparada: {
+    marginTop: 17,
+  },
+  campoContenedor: {
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  campo: {
+    flex: 1,
+    marginLeft: 9,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#101828',
+  },
+  ayuda: {
+    marginTop: 6,
+    fontSize: 11,
+    color: '#667085',
+  },
+  campoMultilinea: {
+    minHeight: 100,
+    alignItems: 'flex-start',
+  },
+  iconoMultilinea: {
+    marginTop: 14,
+  },
+  textoMultilinea: {
+    minHeight: 96,
+    paddingTop: 13,
+    paddingBottom: 13,
+  },
+  campoDescripcion: {
+    minHeight: 135,
+    alignItems: 'flex-start',
+  },
+  textoDescripcion: {
+    minHeight: 130,
+    marginLeft: 0,
+    paddingTop: 13,
+    paddingBottom: 13,
+  },
+  contadorCaracteres: {
+    marginTop: 6,
+    fontSize: 10,
+    color: '#98A2B3',
+    textAlign: 'right',
+  },
+  aviso: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 14,
+    padding: 15,
+    marginBottom: 17,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  avisoTexto: {
+    flex: 1,
+    marginLeft: 9,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#1D4ED8',
+  },
+  botonEnviar: {
+    minHeight: 56,
+    borderRadius: 14,
+    backgroundColor: '#2563EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  botonEnviarDeshabilitado: {
+    opacity: 0.5,
+  },
+  botonEnviarPresionado: {
+    opacity: 0.85,
+  },
+  botonEnviarTexto: {
+    marginLeft: 8,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  botonCancelar: {
+    minHeight: 50,
+    marginTop: 10,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botonCancelarTexto: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#667085',
   },
 });

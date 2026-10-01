@@ -1,18 +1,25 @@
-import React, { useCallback, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
   ActivityIndicator,
   Alert,
-  StatusBar,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { solicitudService } from '../../services/solicitudService';
+import { userService } from '../../services/userService';
 
 const ESTADOS = {
   PENDIENTE: {
@@ -29,46 +36,63 @@ const ESTADOS = {
   },
   RECHAZADA: {
     texto: 'Rechazada',
-    color: '#B91C1C',
-    fondo: '#FEE2E2',
+    color: '#B42318',
+    fondo: '#FEE4E2',
     icono: 'close-circle-outline',
   },
   EN_PROCESO: {
     texto: 'En proceso',
-    color: '#1D4ED8',
-    fondo: '#DBEAFE',
+    color: '#175CD3',
+    fondo: '#EFF8FF',
     icono: 'sync-outline',
   },
   COMPLETADA: {
     texto: 'Completada',
-    color: '#15803D',
-    fondo: '#DCFCE7',
+    color: '#027A48',
+    fondo: '#ECFDF3',
     icono: 'checkmark-done-outline',
   },
   CANCELADA: {
     texto: 'Cancelada',
-    color: '#64748B',
-    fondo: '#E2E8F0',
+    color: '#475467',
+    fondo: '#F2F4F7',
     icono: 'ban-outline',
   },
 };
 
-const ESTADOS_CANCELABLES = ['PENDIENTE', 'ACEPTADA'];
+const ESTADOS_CANCELABLES = [
+  'PENDIENTE',
+  'ACEPTADA',
+  'EN_PROCESO',
+];
 
 const obtenerEstiloEstado = (estado) => {
   return (
     ESTADOS[String(estado || '').toUpperCase()] || {
       texto: 'Sin estado',
-      color: '#475569',
-      fondo: '#E2E8F0',
+      color: '#475467',
+      fondo: '#F2F4F7',
       icono: 'help-circle-outline',
     }
   );
 };
 
-const formatearFecha = (valor, conHora = false) => {
+const formatearFecha = (
+  valor,
+  conHora = false
+) => {
   if (!valor) {
     return 'Sin definir';
+  }
+
+  if (
+    !conHora &&
+    /^\d{4}-\d{2}-\d{2}$/.test(String(valor))
+  ) {
+    const [anio, mes, dia] =
+      String(valor).split('-');
+
+    return `${dia}/${mes}/${anio}`;
   }
 
   const fecha = new Date(valor);
@@ -94,149 +118,275 @@ const formatearFecha = (valor, conHora = false) => {
   });
 };
 
-const FilaDato = ({ icono, etiqueta, valor }) => (
-  <View style={styles.filaDato}>
-    <View style={styles.iconoDato}>
-      <Ionicons
-        name={icono}
-        size={17}
-        color="#0D9488"
-      />
-    </View>
+const formatearHora = (valor) => {
+  if (!valor) {
+    return 'Sin definir';
+  }
 
-    <View style={styles.datoTexto}>
-      <Text style={styles.datoEtiqueta}>
-        {etiqueta}
-      </Text>
+  return String(valor).substring(0, 5);
+};
 
-      <Text style={styles.datoValor}>
-        {valor || 'Sin definir'}
-      </Text>
+const obtenerMensajeError = (error) => {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.mensaje ||
+    error?.response?.data?.title ||
+    error?.message ||
+    'No se pudo cargar el detalle de la solicitud.'
+  );
+};
+
+const FilaDato = ({
+  icono,
+  etiqueta,
+  valor,
+}) => {
+  return (
+    <View style={styles.filaDato}>
+      <View style={styles.iconoDato}>
+        <Ionicons
+          name={icono}
+          size={19}
+          color="#0D9488"
+        />
+      </View>
+
+      <View style={styles.datoContenido}>
+        <Text style={styles.datoEtiqueta}>
+          {etiqueta}
+        </Text>
+
+        <Text style={styles.datoValor}>
+          {valor || 'Sin definir'}
+        </Text>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 export default function DetalleSolicitudClienteScreen({
   navigation,
   route,
 }) {
-  const solicitudId = route?.params?.solicitudId;
+  const solicitudId =
+    route?.params?.solicitudId;
 
-  const [solicitud, setSolicitud] = useState(null);
-  const [historial, setHistorial] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [cancelando, setCancelando] = useState(false);
+  const [solicitud, setSolicitud] =
+    useState(null);
+  const [trabajador, setTrabajador] =
+    useState(null);
+  const [cargando, setCargando] =
+    useState(true);
+  const [cancelando, setCancelando] =
+    useState(false);
   const [motivo, setMotivo] = useState('');
   const [error, setError] = useState(null);
+  const [alturaTeclado, setAlturaTeclado] =
+    useState(0);
 
-  const cargarDetalle = useCallback(async () => {
-    try {
-      setError(null);
+  useEffect(() => {
+    const mostrarTeclado = Keyboard.addListener(
+      'keyboardDidShow',
+      (event) => {
+        setAlturaTeclado(
+          event.endCoordinates.height
+        );
+      }
+    );
 
-      const detalle = await solicitudService.obtenerDetalle(
-        solicitudId
-      );
+    const ocultarTeclado = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setAlturaTeclado(0);
+      }
+    );
 
-      setSolicitud(detalle);
+    return () => {
+      mostrarTeclado.remove();
+      ocultarTeclado.remove();
+    };
+  }, []);
+
+  const cargarDetalle = useCallback(
+    async (mostrarCarga = true) => {
+      if (!solicitudId) {
+        setError(
+          'No fue posible identificar la solicitud.'
+        );
+        setCargando(false);
+        return;
+      }
+
+      if (mostrarCarga) {
+        setCargando(true);
+      }
 
       try {
-        const registros =
-          await solicitudService.obtenerHistorial(solicitudId);
+        setError(null);
 
-        setHistorial(registros);
-      } catch {
-        setHistorial([]);
+        const detalle =
+          await solicitudService.obtenerSolicitudPorId(
+            solicitudId
+          );
+
+        setSolicitud(detalle);
+
+        const trabajadorId = Number(
+          detalle?.trabajadorId
+        );
+
+        if (
+          Number.isInteger(trabajadorId) &&
+          trabajadorId > 0
+        ) {
+          try {
+            const usuario =
+              await userService.obtenerUsuarioPorId(
+                trabajadorId
+              );
+
+            setTrabajador(usuario);
+          } catch {
+            setTrabajador(null);
+          }
+        } else {
+          setTrabajador(null);
+        }
+      } catch (err) {
+        setSolicitud(null);
+        setTrabajador(null);
+        setError(obtenerMensajeError(err));
+      } finally {
+        setCargando(false);
       }
-    } catch (excepcion) {
-      setError(
-        excepcion.message ||
-          'No se pudo cargar el detalle de la solicitud.'
-      );
-    } finally {
-      setCargando(false);
-    }
-  }, [solicitudId]);
+    },
+    [solicitudId]
+  );
 
-  React.useEffect(() => {
-    if (!solicitudId) {
-      setError(
-        'No fue posible identificar la solicitud solicitada.'
+  useEffect(() => {
+    cargarDetalle();
+  }, [cargarDetalle]);
+
+  const ejecutarCancelacion = () => {
+    const motivoLimpio = motivo.trim();
+
+    if (!motivoLimpio) {
+      Alert.alert(
+        'Motivo requerido',
+        'Debes indicar el motivo de la cancelación.'
       );
-      setCargando(false);
       return;
     }
 
-    cargarDetalle();
-  }, [solicitudId, cargarDetalle]);
+    if (motivoLimpio.length > 500) {
+      Alert.alert(
+        'Motivo demasiado largo',
+        'El motivo no puede superar los 500 caracteres.'
+      );
+      return;
+    }
 
-  const confirmarCancelacion = () => {
+    Keyboard.dismiss();
+
     Alert.alert(
       'Cancelar solicitud',
-      'Esta accion no se puede deshacer. Puedes indicar el motivo de la cancelacion.',
+      '¿Estás seguro de que deseas cancelar esta solicitud?',
       [
-        { text: 'Volver', style: 'cancel' },
+        {
+          text: 'Volver',
+          style: 'cancel',
+        },
         {
           text: 'Cancelar solicitud',
           style: 'destructive',
-          onPress: ejecutarCancelacion,
+          onPress: async () => {
+            setCancelando(true);
+
+            try {
+              await solicitudService.cancelarSolicitud(
+                solicitudId,
+                motivoLimpio
+              );
+
+              setMotivo('');
+
+              await cargarDetalle(false);
+
+              Alert.alert(
+                'Solicitud cancelada',
+                'La solicitud fue cancelada correctamente.'
+              );
+            } catch (err) {
+              Alert.alert(
+                'No se pudo cancelar',
+                obtenerMensajeError(err)
+              );
+            } finally {
+              setCancelando(false);
+            }
+          },
         },
       ]
     );
   };
 
-  const ejecutarCancelacion = async () => {
-    setCancelando(true);
-
-    try {
-      await solicitudService.cancelar(solicitudId, motivo);
-
-      setMotivo('');
-      await cargarDetalle();
-    } catch (excepcion) {
-      Alert.alert(
-        'No se pudo cancelar',
-        excepcion.message ||
-          'Inténtalo nuevamente en unos instantes.'
-      );
-    } finally {
-      setCancelando(false);
-    }
-  };
-
   const abrirChat = () => {
+    Keyboard.dismiss();
+
     navigation.navigate('Chat', {
       solicitudId,
     });
   };
 
+  const estadoActual = String(
+    solicitud?.estado || ''
+  ).toUpperCase();
+
   const puedeCancelar =
-    solicitud &&
     ESTADOS_CANCELABLES.includes(
-      String(solicitud.estado).toUpperCase()
+      estadoActual
     );
 
-  const chatDisponible = ['ACEPTADA', 'EN_PROCESO'].includes(
-    String(solicitud?.estado || '').toUpperCase()
-  );
+  const chatDisponible = [
+    'ACEPTADA',
+    'EN_PROCESO',
+  ].includes(estadoActual);
 
   if (cargando) {
     return (
-      <SafeAreaView
-        style={styles.container}
-        edges={['top']}
-      >
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="#12344D"
-        />
+      <SafeAreaView style={styles.contenedor}>
+        <View style={styles.encabezado}>
+          <Pressable
+            style={styles.botonVolver}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={24}
+              color="#101828"
+            />
+          </Pressable>
 
-        <View style={styles.centro}>
+          <View style={styles.encabezadoTexto}>
+            <Text style={styles.titulo}>
+              Detalle de solicitud
+            </Text>
+
+            <Text style={styles.subtitulo}>
+              Información del servicio
+            </Text>
+          </View>
+
+          <View style={styles.espacio} />
+        </View>
+
+        <View style={styles.cargando}>
           <ActivityIndicator
             size="large"
             color="#0D9488"
           />
 
-          <Text style={styles.textoCarga}>
+          <Text style={styles.cargandoTexto}>
             Cargando solicitud...
           </Text>
         </View>
@@ -244,582 +394,887 @@ export default function DetalleSolicitudClienteScreen({
     );
   }
 
-  if (error) {
+  if (error || !solicitud) {
     return (
-      <SafeAreaView
-        style={styles.container}
-        edges={['top']}
-      >
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="#12344D"
-        />
-
-        <View style={styles.centro}>
-          <View style={[styles.iconoVacio, styles.iconoError]}>
+      <SafeAreaView style={styles.contenedor}>
+        <View style={styles.encabezado}>
+          <Pressable
+            style={styles.botonVolver}
+            onPress={() => navigation.goBack()}
+          >
             <Ionicons
-              name="cloud-offline-outline"
-              size={38}
-              color="#DC2626"
+              name="arrow-back"
+              size={24}
+              color="#101828"
+            />
+          </Pressable>
+
+          <View style={styles.encabezadoTexto}>
+            <Text style={styles.titulo}>
+              Detalle de solicitud
+            </Text>
+
+            <Text style={styles.subtitulo}>
+              Información del servicio
+            </Text>
+          </View>
+
+          <View style={styles.espacio} />
+        </View>
+
+        <View style={styles.errorPantalla}>
+          <View style={styles.iconoError}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={42}
+              color="#B42318"
             />
           </View>
 
-          <Text style={styles.tituloVacio}>
+          <Text style={styles.estadoTitulo}>
             No pudimos cargar la solicitud
           </Text>
 
-          <Text style={styles.textoVacio}>
-            {error}
+          <Text style={styles.estadoTexto}>
+            {error ||
+              'No se encontró la solicitud.'}
           </Text>
 
-          <TouchableOpacity
-            style={styles.botonPrimario}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.85}
+          <Pressable
+            style={styles.botonReintentar}
+            onPress={() => cargarDetalle()}
           >
-            <Text style={styles.textoBotonPrimario}>
-              Volver
+            <Text
+              style={styles.botonReintentarTexto}
+            >
+              Intentar nuevamente
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
   }
 
-  const estiloEstado = obtenerEstiloEstado(solicitud?.estado);
+  const estiloEstado =
+    obtenerEstiloEstado(solicitud.estado);
 
   return (
-    <SafeAreaView
-      style={styles.container}
-      edges={['top']}
-    >
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#12344D"
-      />
-
-      <View style={styles.header}>
-        <TouchableOpacity
+    <SafeAreaView style={styles.contenedor}>
+      <View style={styles.encabezado}>
+        <Pressable
           style={styles.botonVolver}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
+          onPress={() => {
+            Keyboard.dismiss();
+            navigation.goBack();
+          }}
         >
           <Ionicons
-            name="arrow-back-outline"
+            name="arrow-back"
             size={24}
-            color="#FFFFFF"
+            color="#101828"
           />
-        </TouchableOpacity>
+        </Pressable>
 
-        <View style={styles.headerTexto}>
-          <Text style={styles.tituloHeader}>
+        <View style={styles.encabezadoTexto}>
+          <Text style={styles.titulo}>
             Detalle de solicitud
           </Text>
 
-          <Text style={styles.subtituloHeader}>
-            Solicitud #{String(solicitud?.id ?? '')}
+          <Text style={styles.subtitulo}>
+            Solicitud #{solicitud.idSolicitud}
           </Text>
         </View>
+
+        <View style={styles.espacio} />
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.contenido}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={
+          Platform.OS === 'ios'
+            ? 'padding'
+            : undefined
+        }
       >
-        <View style={styles.tarjetaEstado}>
-          <View style={styles.iconoEstado}>
-            <Ionicons
-              name="document-text-outline"
-              size={26}
-              color="#0D9488"
-            />
-          </View>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.contenido,
+            alturaTeclado > 0 && {
+              paddingBottom:
+                alturaTeclado + 24,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode="none"
+        >
+          <View style={styles.tarjetaPrincipal}>
+            <View style={styles.tarjetaSuperior}>
+              <View style={styles.iconoServicio}>
+                <Ionicons
+                  name="briefcase-outline"
+                  size={25}
+                  color="#0D9488"
+                />
+              </View>
 
-          <View style={styles.estadoTexto}>
-            <Text style={styles.estadoServicio}>
-              {solicitud?.servicio?.nombre ||
-                solicitud?.servicioNombre ||
-                'Servicio'}
-            </Text>
+              <View
+                style={styles.servicioInformacion}
+              >
+                <Text
+                  style={styles.servicioTitulo}
+                  numberOfLines={2}
+                >
+                  {solicitud.servicioTitulo ||
+                    'Servicio'}
+                </Text>
 
-            <View
-              style={[
-                styles.badge,
-                { backgroundColor: estiloEstado.fondo },
-              ]}
-            >
-              <Ionicons
-                name={estiloEstado.icono}
-                size={13}
-                color={estiloEstado.color}
-              />
+                <Text
+                  style={styles.solicitudNumero}
+                >
+                  Solicitud #
+                  {solicitud.idSolicitud}
+                </Text>
+              </View>
 
-              <Text
+              <View
                 style={[
-                  styles.badgeTexto,
-                  { color: estiloEstado.color },
+                  styles.badge,
+                  {
+                    backgroundColor:
+                      estiloEstado.fondo,
+                  },
                 ]}
               >
-                {estiloEstado.texto}
+                <Ionicons
+                  name={estiloEstado.icono}
+                  size={14}
+                  color={estiloEstado.color}
+                />
+
+                <Text
+                  style={[
+                    styles.badgeTexto,
+                    {
+                      color:
+                        estiloEstado.color,
+                    },
+                  ]}
+                >
+                  {estiloEstado.texto}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.tarjeta}>
+            <View style={styles.tituloSeccionFila}>
+              <View style={styles.iconoSeccion}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={20}
+                  color="#0D9488"
+                />
+              </View>
+
+              <Text style={styles.tituloSeccion}>
+                Información del servicio
+              </Text>
+            </View>
+
+            <FilaDato
+              icono="calendar-outline"
+              etiqueta="Fecha propuesta"
+              valor={formatearFecha(
+                solicitud.fechaPropuesta
+              )}
+            />
+
+            <FilaDato
+              icono="time-outline"
+              etiqueta="Hora aproximada"
+              valor={formatearHora(
+                solicitud.horaAproximada
+              )}
+            />
+
+            <FilaDato
+              icono="location-outline"
+              etiqueta="Dirección"
+              valor={
+                solicitud.direccionServicio
+              }
+            />
+
+            <FilaDato
+              icono="person-outline"
+              etiqueta="Trabajador"
+              valor={
+                trabajador?.nombre ||
+                `Trabajador #${solicitud.trabajadorId}`
+              }
+            />
+
+            <View
+              style={styles.descripcionContenedor}
+            >
+              <Text
+                style={styles.descripcionEtiqueta}
+              >
+                Descripción del trabajo
+              </Text>
+
+              <Text
+                style={styles.descripcionTexto}
+              >
+                {solicitud.descripcionTrabajo ||
+                  'Sin descripción registrada'}
               </Text>
             </View>
           </View>
-        </View>
 
-        <View style={styles.tarjeta}>
-          <Text style={styles.tituloSeccion}>
-            Informacion del servicio
-          </Text>
-
-          <FilaDato
-            icono="calendar-outline"
-            etiqueta="Fecha propuesta"
-            valor={formatearFecha(solicitud?.fechaPropuesta)}
-          />
-
-          <FilaDato
-            icono="time-outline"
-            etiqueta="Hora aproximada"
-            valor={solicitud?.horaAproximada}
-          />
-
-          <FilaDato
-            icono="location-outline"
-            etiqueta="Direccion"
-            valor={solicitud?.direccion}
-          />
-
-          <FilaDato
-            icono="person-outline"
-            etiqueta="Trabajador asignado"
-            valor={solicitud?.trabajadorNombre}
-          />
-
-          <View style={styles.descripcion}>
-            <Text style={styles.datoEtiqueta}>
-              Descripcion del trabajo
-            </Text>
-
-            <Text style={styles.descripcionTexto}>
-              {solicitud?.descripcionTrabajo ||
-                'Sin descripcion registrada'}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.tarjeta}>
-          <Text style={styles.tituloSeccion}>
-            Seguimiento
-          </Text>
-
-          <FilaDato
-            icono="time-outline"
-            etiqueta="Registrada el"
-            valor={formatearFecha(
-              solicitud?.fechaCreacion,
-              true
-            )}
-          />
-
-          <FilaDato
-            icono="refresh-outline"
-            etiqueta="Ultima actualizacion"
-            valor={formatearFecha(
-              solicitud?.fechaActualizacion,
-              true
-            )}
-          />
-
-          {solicitud?.motivoCancelacion ? (
-            <FilaDato
-              icono="information-circle-outline"
-              etiqueta="Motivo de cancelacion"
-              valor={solicitud.motivoCancelacion}
-            />
-          ) : null}
-        </View>
-
-        {historial.length > 0 ? (
           <View style={styles.tarjeta}>
-            <Text style={styles.tituloSeccion}>
-              Historial de estados
-            </Text>
+            <View style={styles.tituloSeccionFila}>
+              <View style={styles.iconoSeccion}>
+                <Ionicons
+                  name="git-branch-outline"
+                  size={20}
+                  color="#0D9488"
+                />
+              </View>
 
-            {historial.map((registro, indice) => {
-              const estiloRegistro = obtenerEstiloEstado(
-                registro.estado
-              );
+              <Text style={styles.tituloSeccion}>
+                Seguimiento
+              </Text>
+            </View>
 
-              return (
+            <FilaDato
+              icono="add-circle-outline"
+              etiqueta="Registrada el"
+              valor={formatearFecha(
+                solicitud.fechaCreacion,
+                true
+              )}
+            />
+
+            <FilaDato
+              icono="refresh-outline"
+              etiqueta="Última actualización"
+              valor={formatearFecha(
+                solicitud.fechaActualizacion,
+                true
+              )}
+            />
+
+            {solicitud.motivoRechazo ? (
+              <View style={styles.motivoAlerta}>
                 <View
-                  key={
-                    registro.id ?? `${registro.estado}-${indice}`
+                  style={
+                    styles.motivoAlertaIcono
                   }
-                  style={styles.lineaHistorial}
                 >
-                  <View style={styles.marcaHistorial}>
-                    <View
-                      style={[
-                        styles.puntoHistorial,
-                        {
-                          backgroundColor: estiloRegistro.color,
-                        },
-                      ]}
-                    />
-
-                    {indice < historial.length - 1 ? (
-                      <View style={styles.lineaVertical} />
-                    ) : null}
-                  </View>
-
-                  <View style={styles.historialTexto}>
-                    <Text style={styles.historialEstado}>
-                      {estiloRegistro.texto}
-                    </Text>
-
-                    <Text style={styles.historialFecha}>
-                      {formatearFecha(
-                        registro.fechaCambio ||
-                          registro.fechaActualizacion,
-                        true
-                      )}
-                    </Text>
-                  </View>
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={20}
+                    color="#B42318"
+                  />
                 </View>
-              );
-            })}
+
+                <View
+                  style={
+                    styles.motivoAlertaContenido
+                  }
+                >
+                  <Text
+                    style={
+                      styles.motivoAlertaTitulo
+                    }
+                  >
+                    Motivo del rechazo
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.motivoAlertaTexto
+                    }
+                  >
+                    {solicitud.motivoRechazo}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            {solicitud.motivoCancelacion ? (
+              <View
+                style={styles.motivoCancelacion}
+              >
+                <View
+                  style={
+                    styles.motivoCancelacionIcono
+                  }
+                >
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={20}
+                    color="#475467"
+                  />
+                </View>
+
+                <View
+                  style={
+                    styles.motivoAlertaContenido
+                  }
+                >
+                  <Text
+                    style={
+                      styles.motivoCancelacionTitulo
+                    }
+                  >
+                    Motivo de cancelación
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.motivoCancelacionTexto
+                    }
+                  >
+                    {
+                      solicitud.motivoCancelacion
+                    }
+                  </Text>
+                </View>
+              </View>
+            ) : null}
           </View>
-        ) : null}
 
-        {chatDisponible ? (
-          <TouchableOpacity
-            style={styles.botonChat}
-            onPress={abrirChat}
-            activeOpacity={0.85}
-          >
-            <Ionicons
-              name="chatbubbles-outline"
-              size={19}
-              color="#FFFFFF"
-            />
+          {chatDisponible ? (
+            <View style={styles.tarjeta}>
+              <View
+                style={styles.tituloSeccionFila}
+              >
+                <View
+                  style={styles.iconoSeccion}
+                >
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={20}
+                    color="#0D9488"
+                  />
+                </View>
 
-            <Text style={styles.textoBoton}>
-              Abrir chat con el trabajador
-            </Text>
-          </TouchableOpacity>
-        ) : null}
+                <Text
+                  style={styles.tituloSeccion}
+                >
+                  Comunicación
+                </Text>
+              </View>
 
-        {puedeCancelar ? (
-          <View style={styles.tarjetaCancelar}>
-            <Text style={styles.tituloCancelar}>
-              Cancelar solicitud
-            </Text>
+              <Text style={styles.ayuda}>
+                Comunícate con el trabajador
+                para coordinar los detalles del
+                servicio.
+              </Text>
 
-            <TextInput
-              style={styles.inputMotivo}
-              placeholder="Motivo de la cancelacion (opcional)"
-              placeholderTextColor="#94A3B8"
-              value={motivo}
-              onChangeText={setMotivo}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              editable={!cancelando}
-            />
+              <Pressable
+                style={styles.botonChat}
+                onPress={abrirChat}
+              >
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={19}
+                  color="#FFFFFF"
+                />
 
-            <TouchableOpacity
-              style={[
-                styles.botonCancelar,
-                cancelando && styles.botonDeshabilitado,
-              ]}
-              onPress={confirmarCancelacion}
-              disabled={cancelando}
-              activeOpacity={0.85}
-            >
-              {cancelando ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.textoBoton}>
+                <Text
+                  style={styles.botonChatTexto}
+                >
+                  Abrir conversación
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {puedeCancelar ? (
+            <View style={styles.tarjeta}>
+              <View
+                style={styles.tituloSeccionFila}
+              >
+                <View
+                  style={[
+                    styles.iconoSeccion,
+                    styles.iconoSeccionRojo,
+                  ]}
+                >
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={20}
+                    color="#B42318"
+                  />
+                </View>
+
+                <Text
+                  style={styles.tituloSeccion}
+                >
                   Cancelar solicitud
                 </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        ) : null}
-      </ScrollView>
+              </View>
+
+              <Text style={styles.ayuda}>
+                Indica el motivo por el que
+                deseas cancelar esta solicitud.
+              </Text>
+
+              <TextInput
+                style={styles.campoMotivo}
+                value={motivo}
+                onChangeText={setMotivo}
+                placeholder="Escribe el motivo de la cancelación..."
+                placeholderTextColor="#98A2B3"
+                multiline
+                maxLength={500}
+                editable={!cancelando}
+                textAlignVertical="top"
+                scrollEnabled
+              />
+
+              <View style={styles.contadorFila}>
+                <Text style={styles.contador}>
+                  {motivo.length}/500
+                </Text>
+              </View>
+
+              <Pressable
+                style={[
+                  styles.botonCancelar,
+                  cancelando &&
+                    styles.botonDeshabilitado,
+                ]}
+                onPress={ejecutarCancelacion}
+                disabled={cancelando}
+              >
+                {cancelando ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#FFFFFF"
+                  />
+                ) : (
+                  <Ionicons
+                    name="close-circle-outline"
+                    size={19}
+                    color="#FFFFFF"
+                  />
+                )}
+
+                <Text
+                  style={
+                    styles.botonCancelarTexto
+                  }
+                >
+                  {cancelando
+                    ? 'Cancelando...'
+                    : 'Cancelar solicitud'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {!puedeCancelar &&
+          !chatDisponible ? (
+            <View style={styles.estadoFinal}>
+              <Ionicons
+                name={
+                  estadoActual === 'COMPLETADA'
+                    ? 'checkmark-circle-outline'
+                    : estadoActual ===
+                        'RECHAZADA'
+                      ? 'close-circle-outline'
+                      : 'information-circle-outline'
+                }
+                size={23}
+                color={
+                  estadoActual === 'COMPLETADA'
+                    ? '#027A48'
+                    : estadoActual ===
+                        'RECHAZADA'
+                      ? '#B42318'
+                      : '#667085'
+                }
+              />
+
+              <Text
+                style={styles.estadoFinalTexto}
+              >
+                {estadoActual === 'COMPLETADA'
+                  ? 'Este servicio fue completado.'
+                  : estadoActual ===
+                      'RECHAZADA'
+                    ? 'Esta solicitud fue rechazada.'
+                    : estadoActual ===
+                        'CANCELADA'
+                      ? 'Esta solicitud fue cancelada.'
+                      : 'Esta solicitud ya no admite cambios.'}
+              </Text>
+            </View>
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  contenedor: {
     flex: 1,
-    backgroundColor: '#12344D',
+    backgroundColor: '#F8FAFC',
   },
-  header: {
-    backgroundColor: '#12344D',
+  flex: {
+    flex: 1,
+  },
+  encabezado: {
+    minHeight: 76,
+    paddingHorizontal: 18,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAECF0',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
   },
   botonVolver: {
     width: 44,
     height: 44,
-    borderRadius: 13,
-    backgroundColor: '#1E506B',
-    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
     alignItems: 'center',
-    marginRight: 13,
+    justifyContent: 'center',
   },
-  headerTexto: {
+  encabezadoTexto: {
     flex: 1,
+    alignItems: 'center',
   },
-  tituloHeader: {
-    color: '#FFFFFF',
-    fontSize: 21,
-    fontWeight: '800',
+  titulo: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#101828',
   },
-  subtituloHeader: {
-    color: '#D6E4EC',
-    fontSize: 12,
+  subtitulo: {
     marginTop: 2,
+    fontSize: 12,
+    color: '#667085',
   },
-  centro: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 34,
-    gap: 12,
-  },
-  textoCarga: {
-    color: '#64748B',
-    fontSize: 13,
-  },
-  iconoVacio: {
-    width: 84,
-    height: 84,
-    borderRadius: 26,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconoError: {
-    backgroundColor: '#FEE2E2',
-  },
-  tituloVacio: {
-    color: '#172B3A',
-    fontSize: 17,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  textoVacio: {
-    color: '#64748B',
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-  },
-  botonPrimario: {
-    backgroundColor: '#0D9488',
-    paddingHorizontal: 26,
-    paddingVertical: 13,
-    borderRadius: 13,
-    marginTop: 20,
-  },
-  textoBotonPrimario: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
+  espacio: {
+    width: 44,
   },
   scroll: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
   },
   contenido: {
-    padding: 20,
-    paddingBottom: 36,
+    padding: 18,
+    paddingBottom: 40,
   },
-  tarjetaEstado: {
+  cargando: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cargandoTexto: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#667085',
+  },
+  errorPantalla: {
+    flex: 1,
+    paddingHorizontal: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconoError: {
+    width: 76,
+    height: 76,
+    borderRadius: 23,
+    backgroundColor: '#FEE4E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  estadoTitulo: {
+    marginTop: 15,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#101828',
+    textAlign: 'center',
+  },
+  estadoTexto: {
+    marginTop: 7,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#667085',
+    textAlign: 'center',
+  },
+  botonReintentar: {
+    marginTop: 20,
+    backgroundColor: '#2563EB',
+    borderRadius: 11,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  botonReintentarTexto: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  tarjetaPrincipal: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#EAECF0',
+    borderRadius: 17,
     padding: 17,
+    marginBottom: 13,
+  },
+  tarjetaSuperior: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  iconoEstado: {
-    width: 54,
-    height: 54,
-    borderRadius: 17,
+  iconoServicio: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  estadoTexto: {
+  servicioInformacion: {
     flex: 1,
-    gap: 7,
+    marginRight: 8,
   },
-  estadoServicio: {
-    color: '#172B3A',
+  servicioTitulo: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
+    color: '#101828',
+  },
+  solicitudNumero: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#667085',
   },
   badge: {
-    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 20,
     gap: 4,
   },
   badgeTexto: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   tarjeta: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 18,
-    marginTop: 14,
+    borderColor: '#EAECF0',
+    borderRadius: 17,
+    padding: 17,
+    marginBottom: 13,
+  },
+  tituloSeccionFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 13,
+  },
+  iconoSeccion: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: '#E6F4F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  iconoSeccionRojo: {
+    backgroundColor: '#FEE4E2',
   },
   tituloSeccion: {
-    color: '#172B3A',
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 13,
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#101828',
   },
   filaDato: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 13,
+    paddingVertical: 9,
   },
   iconoDato: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: 11,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
+    backgroundColor: '#F0FDFA',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 11,
   },
-  datoTexto: {
+  datoContenido: {
     flex: 1,
   },
   datoEtiqueta: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#667085',
   },
   datoValor: {
-    color: '#172B3A',
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  descripcion: {
     marginTop: 3,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#101828',
+  },
+  descripcionContenedor: {
+    marginTop: 10,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#EAECF0',
+  },
+  descripcionEtiqueta: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#667085',
   },
   descripcionTexto: {
-    color: '#172B3A',
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 5,
-  },
-  lineaHistorial: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  marcaHistorial: {
-    alignItems: 'center',
-    marginRight: 13,
-    width: 14,
-  },
-  puntoHistorial: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    marginTop: 4,
-  },
-  lineaVertical: {
-    flex: 1,
-    width: 2,
-    backgroundColor: '#E2E8F0',
-    marginVertical: 3,
-  },
-  historialTexto: {
-    flex: 1,
-    paddingBottom: 15,
-  },
-  historialEstado: {
-    color: '#172B3A',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  historialFecha: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  botonChat: {
-    minHeight: 54,
-    backgroundColor: '#0D9488',
-    borderRadius: 15,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 18,
-    gap: 8,
-  },
-  textoBoton: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  tarjetaCancelar: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    padding: 18,
-    marginTop: 18,
-  },
-  tituloCancelar: {
-    color: '#991B1B',
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 11,
-  },
-  inputMotivo: {
-    minHeight: 82,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    color: '#172B3A',
+    marginTop: 7,
     fontSize: 14,
-    textAlignVertical: 'top',
+    lineHeight: 21,
+    color: '#344054',
+  },
+  motivoAlerta: {
+    marginTop: 12,
+    borderRadius: 13,
+    backgroundColor: '#FEF3F2',
+    padding: 13,
+    flexDirection: 'row',
+  },
+  motivoAlertaIcono: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#FEE4E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  motivoAlertaContenido: {
+    flex: 1,
+  },
+  motivoAlertaTitulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B42318',
+  },
+  motivoAlertaTexto: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#912018',
+  },
+  motivoCancelacion: {
+    marginTop: 12,
+    borderRadius: 13,
+    backgroundColor: '#F2F4F7',
+    padding: 13,
+    flexDirection: 'row',
+  },
+  motivoCancelacionIcono: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#EAECF0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  motivoCancelacionTitulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#344054',
+  },
+  motivoCancelacionTexto: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#475467',
+  },
+  ayuda: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#667085',
     marginBottom: 13,
   },
-  botonCancelar: {
+  botonChat: {
     minHeight: 50,
-    backgroundColor: '#DC2626',
-    borderRadius: 13,
-    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#0D9488',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  botonChatTexto: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  campoMotivo: {
+    minHeight: 112,
+    maxHeight: 180,
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 13,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#101828',
+  },
+  contadorFila: {
+    alignItems: 'flex-end',
+    marginTop: 6,
+  },
+  contador: {
+    fontSize: 11,
+    color: '#98A2B3',
+  },
+  botonCancelar: {
+    marginTop: 13,
+    minHeight: 50,
+    borderRadius: 12,
+    backgroundColor: '#B42318',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  botonCancelarTexto: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
   botonDeshabilitado: {
-    opacity: 0.65,
+    opacity: 0.6,
+  },
+  estadoFinal: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+    borderRadius: 15,
+    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  estadoFinalTexto: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#475467',
   },
 });

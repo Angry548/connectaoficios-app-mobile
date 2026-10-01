@@ -242,6 +242,25 @@ export const servicioService = {
     return Array.isArray(response.data) ? response.data : [];
   },
 
+  obtenerPerfilTrabajadorPorId: async (perfilTrabajadorId) => {
+  const perfilId = Number(perfilTrabajadorId);
+
+  if (
+    !Number.isInteger(perfilId) ||
+    perfilId <= 0
+  ) {
+    throw new Error(
+      'El identificador del perfil del trabajador no es válido.'
+    );
+  }
+
+  const response = await apiJava.get(
+    `/api/perfiles-trabajador/${perfilId}`
+  );
+
+  return response.data;
+},
+
   obtenerPorId: async (id) => {
     if (!id) {
       throw new Error(

@@ -1,760 +1,711 @@
-import React, { useCallback, useState } from 'react';
+import React, {
+  useCallback,
+  useState,
+} from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
   ActivityIndicator,
-  Alert,
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+} from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import {
+  useFocusEffect,
+} from '@react-navigation/native';
+import {
+  perfilTrabajadorService,
+} from '../../services/perfilTrabajadorService';
 
-import { useAuth } from '../../context/AuthContext';
-import perfilTrabajadorService from '../../services/perfilTrabajadorService';
-
-export default function MiPerfilProfesionalScreen({ navigation }) {
-  const { usuario } = useAuth();
-
+export default function MiPerfilProfesionalScreen({
+  navigation,
+}) {
   const [perfil, setPerfil] = useState(null);
   const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState(false);
+  const [actualizando, setActualizando] =
+    useState(false);
+  const [error, setError] = useState('');
 
-  const cargarPerfil = async () => {
-    try {
-      setCargando(true);
-      setError(false);
-
-      if (!usuario?.id) {
-        setError(true);
-        return;
+  const cargarPerfil = useCallback(
+    async (mostrarCarga = true) => {
+      if (mostrarCarga) {
+        setCargando(true);
       }
 
-      const data =
-        await perfilTrabajadorService.obtenerPerfilPorTrabajador(
-          usuario.id
-        );
+      setError('');
 
-      setPerfil(data);
-    } catch (e) {
-      console.log('Error al cargar perfil profesional:', e);
+      try {
+        const resultado =
+          await perfilTrabajadorService.obtenerMiPerfil();
 
-      if (e.response?.status === 404) {
-        setPerfil(null);
-      } else {
-        setError(true);
+        setPerfil(resultado);
+      } catch (err) {
+        if (err?.response?.status === 404) {
+          setPerfil(null);
+          setError('');
+        } else {
+          const mensaje =
+            err?.response?.data?.message ||
+            err?.response?.data?.mensaje ||
+            err?.message ||
+            'No se pudo cargar tu perfil profesional.';
+
+          setError(mensaje);
+        }
+      } finally {
+        setCargando(false);
+        setActualizando(false);
       }
-    } finally {
-      setCargando(false);
-    }
-  };
+    },
+    []
+  );
 
   useFocusEffect(
     useCallback(() => {
       cargarPerfil();
-    }, [usuario?.id])
+
+      return undefined;
+    }, [cargarPerfil])
   );
 
-  const manejarEditar = () => {
-    navigation.navigate('EditarPerfilTrabajador');
-  };
-
-  const manejarCrearPerfil = () => {
-    navigation.navigate('EditarPerfilTrabajador');
+  const actualizar = async () => {
+    setActualizando(true);
+    await cargarPerfil(false);
   };
 
   const obtenerUbicacion = () => {
     if (!perfil) {
-      return 'Zona no definida';
+      return '';
     }
 
-    const partes = [
+    return [
       perfil.localidad,
       perfil.municipio,
       perfil.departamento,
-    ].filter(Boolean);
-
-    return partes.length > 0
-      ? partes.join(', ')
-      : 'Zona no definida';
+    ]
+      .filter(Boolean)
+      .join(', ');
   };
+
+  const porcentaje = Math.min(
+    Math.max(
+      Number(
+        perfil?.porcentajeCompletitud ?? 0
+      ),
+      0
+    ),
+    100
+  );
 
   if (cargando) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="#12344D"
-        />
+      <SafeAreaView style={styles.contenedor}>
+        <View style={styles.centro}>
+          <ActivityIndicator size="large" />
 
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.botonVolver}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="arrow-back-outline"
-              size={24}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
-
-          <View style={styles.headerTexto}>
-            <Text style={styles.tituloHeader}>
-              Mi perfil profesional
-            </Text>
-
-            <Text style={styles.subtituloHeader}>
-              Información profesional
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.cargandoContainer}>
-          <ActivityIndicator
-            size="large"
-            color="#0D9488"
-          />
-
-          <Text style={styles.textoCargando}>
-            Cargando perfil...
+          <Text style={styles.textoCarga}>
+            Cargando perfil profesional...
           </Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  if (error) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="#12344D"
-        />
-
-        <View style={styles.header}>
-          <TouchableOpacity
+  return (
+    <SafeAreaView style={styles.contenedor}>
+      <View style={styles.encabezado}>
+        <View style={styles.encabezadoPrincipal}>
+          <Pressable
             style={styles.botonVolver}
             onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
           >
             <Ionicons
-              name="arrow-back-outline"
-              size={24}
-              color="#FFFFFF"
+              name="arrow-back"
+              size={23}
+              color="#101828"
             />
-          </TouchableOpacity>
+          </Pressable>
 
-          <View style={styles.headerTexto}>
-            <Text style={styles.tituloHeader}>
-              Mi perfil profesional
+          <View style={styles.encabezadoTexto}>
+            <Text style={styles.titulo}>
+              Perfil profesional
             </Text>
 
-            <Text style={styles.subtituloHeader}>
-              Información profesional
+            <Text style={styles.subtitulo}>
+              Presenta tu experiencia y oficio
             </Text>
           </View>
         </View>
 
-        <View style={styles.mensajeContainer}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={52}
-            color="#DC2626"
-          />
-
-          <Text style={styles.mensajeTitulo}>
-            No pudimos cargar tu perfil
-          </Text>
-
-          <Text style={styles.mensajeTexto}>
-            Ocurrió un problema al consultar la información
-            profesional.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.botonPrincipal}
-            onPress={cargarPerfil}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.textoBotonPrincipal}>
-              Intentar nuevamente
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!perfil) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="#12344D"
-        />
-
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.botonVolver}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="arrow-back-outline"
-              size={24}
-              color="#FFFFFF"
-            />
-          </TouchableOpacity>
-
-          <View style={styles.headerTexto}>
-            <Text style={styles.tituloHeader}>
-              Mi perfil profesional
-            </Text>
-
-            <Text style={styles.subtituloHeader}>
-              Información profesional
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.mensajeContainer}>
-          <View style={styles.iconoVacio}>
-            <Ionicons
-              name="briefcase-outline"
-              size={42}
-              color="#0D9488"
-            />
-          </View>
-
-          <Text style={styles.mensajeTitulo}>
-            Aún no tienes un perfil profesional
-          </Text>
-
-          <Text style={styles.mensajeTexto}>
-            Completa tu información profesional para que los
-            clientes puedan conocer tus servicios.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.botonPrincipal}
-            onPress={manejarCrearPerfil}
-            activeOpacity={0.8}
+        {perfil ? (
+          <Pressable
+            style={styles.botonEditarSuperior}
+            onPress={() =>
+              navigation.navigate(
+                'EditarPerfilTrabajador',
+                {
+                  perfil,
+                  modoCreacion: false,
+                }
+              )
+            }
           >
             <Ionicons
               name="create-outline"
-              size={20}
+              size={22}
               color="#FFFFFF"
             />
-
-            <Text style={styles.textoBotonPrincipal}>
-              Crear perfil profesional
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const porcentaje = Number(
-    perfil.porcentajeCompletitud || 0
-  );
-
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#12344D"
-      />
-
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.botonVolver}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="arrow-back-outline"
-            size={24}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
-
-        <View style={styles.headerTexto}>
-          <Text style={styles.tituloHeader}>
-            Mi perfil profesional
-          </Text>
-
-          <Text style={styles.subtituloHeader}>
-            Información profesional
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.botonEditarHeader}
-          onPress={manejarEditar}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="create-outline"
-            size={22}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
+          </Pressable>
+        ) : null}
       </View>
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.contenido}
         showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.tarjetaPerfil}>
-          <View style={styles.avatar}>
-            <Ionicons
-              name="briefcase-outline"
-              size={38}
-              color="#0D9488"
-            />
-          </View>
-
-          <View style={styles.datosPrincipales}>
-            <Text style={styles.oficio}>
-              {perfil.oficioPrincipal}
-            </Text>
-
-            <Text style={styles.nombreTrabajador}>
-              {usuario?.nombre || 'Trabajador'}
-            </Text>
-
-            <View style={styles.ubicacion}>
-              <Ionicons
-                name="location-outline"
-                size={15}
-                color="#64748B"
-              />
-
-              <Text style={styles.textoUbicacion}>
-                {obtenerUbicacion()}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.tarjetaCompletitud}>
-          <View style={styles.filaCompletitud}>
-            <View>
-              <Text style={styles.tituloCompletitud}>
-                Perfil completado
-              </Text>
-
-              <Text style={styles.subtituloCompletitud}>
-                Mantén tu información actualizada.
-              </Text>
-            </View>
-
-            <Text style={styles.porcentaje}>
-              {porcentaje}%
-            </Text>
-          </View>
-
-          <View style={styles.barraFondo}>
-            <View
-              style={[
-                styles.barraProgreso,
-                { width: `${Math.min(porcentaje, 100)}%` },
-              ]}
-            />
-          </View>
-        </View>
-
-        <View style={styles.seccion}>
-          <Text style={styles.tituloSeccion}>
-            Sobre mi trabajo
-          </Text>
-
-          <View style={styles.tarjeta}>
-            <View style={styles.iconoSeccion}>
-              <Ionicons
-                name="information-circle-outline"
-                size={22}
-                color="#0D9488"
-              />
-            </View>
-
-            <View style={styles.contenidoTarjeta}>
-              <Text style={styles.tituloCampo}>
-                Descripción profesional
-              </Text>
-
-              <Text style={styles.valorCampo}>
-                {perfil.descripcionProfesional ||
-                  'No has agregado una descripción profesional.'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.tarjeta}>
-            <View style={styles.iconoSeccion}>
-              <Ionicons
-                name="time-outline"
-                size={22}
-                color="#0D9488"
-              />
-            </View>
-
-            <View style={styles.contenidoTarjeta}>
-              <Text style={styles.tituloCampo}>
-                Experiencia laboral
-              </Text>
-
-              <Text style={styles.valorCampo}>
-                {perfil.experienciaLaboral ||
-                  'No has agregado información sobre tu experiencia.'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.seccion}>
-          <Text style={styles.tituloSeccion}>
-            Zona principal
-          </Text>
-
-          <View style={styles.tarjeta}>
-            <View style={styles.iconoSeccion}>
-              <Ionicons
-                name="location-outline"
-                size={22}
-                color="#0D9488"
-              />
-            </View>
-
-            <View style={styles.contenidoTarjeta}>
-              <Text style={styles.tituloCampo}>
-                Ubicación de trabajo
-              </Text>
-
-              <Text style={styles.valorCampo}>
-                {obtenerUbicacion()}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.botonEditar}
-          onPress={manejarEditar}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="create-outline"
-            size={21}
-            color="#FFFFFF"
+        refreshControl={
+          <RefreshControl
+            refreshing={actualizando}
+            onRefresh={actualizar}
           />
+        }
+      >
+        {error ? (
+          <View style={styles.errorContenedor}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={42}
+              color="#B42318"
+            />
 
-          <Text style={styles.textoBotonEditar}>
-            Editar perfil profesional
-          </Text>
-        </TouchableOpacity>
+            <Text style={styles.errorTitulo}>
+              No se pudo cargar tu perfil
+            </Text>
+
+            <Text style={styles.errorTexto}>
+              {error}
+            </Text>
+
+            <Pressable
+              style={styles.botonReintentar}
+              onPress={() => cargarPerfil()}
+            >
+              <Text
+                style={styles.botonReintentarTexto}
+              >
+                Intentar nuevamente
+              </Text>
+            </Pressable>
+          </View>
+        ) : !perfil ? (
+          <View style={styles.vacio}>
+            <View style={styles.iconoVacio}>
+              <Ionicons
+                name="person-outline"
+                size={46}
+                color="#2563EB"
+              />
+            </View>
+
+            <Text style={styles.vacioTitulo}>
+              Crea tu perfil profesional
+            </Text>
+
+            <Text style={styles.vacioTexto}>
+              Agrega tu oficio, experiencia y zona
+              principal para que los clientes puedan
+              conocerte mejor.
+            </Text>
+
+            <Pressable
+              style={styles.botonCrear}
+              onPress={() =>
+                navigation.navigate(
+                  'EditarPerfilTrabajador',
+                  {
+                    modoCreacion: true,
+                  }
+                )
+              }
+            >
+              <Ionicons
+                name="add-circle-outline"
+                size={21}
+                color="#FFFFFF"
+              />
+
+              <Text style={styles.botonCrearTexto}>
+                Crear perfil profesional
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <View style={styles.tarjetaPrincipal}>
+              <View style={styles.perfilSuperior}>
+                {perfil.fotoUrl ? (
+                  <Image
+                    source={{
+                      uri: perfil.fotoUrl,
+                    }}
+                    style={styles.foto}
+                  />
+                ) : (
+                  <View style={styles.fotoVacia}>
+                    <Ionicons
+                      name="person"
+                      size={38}
+                      color="#2563EB"
+                    />
+                  </View>
+                )}
+
+                <View style={styles.datosPrincipales}>
+                  <Text style={styles.oficio}>
+                    {perfil.oficioPrincipal ||
+                      'Sin oficio principal'}
+                  </Text>
+
+                  <View style={styles.ubicacionFila}>
+                    <Ionicons
+                      name="location-outline"
+                      size={16}
+                      color="#667085"
+                    />
+
+                    <Text
+                      style={styles.ubicacionTexto}
+                      numberOfLines={2}
+                    >
+                      {obtenerUbicacion() ||
+                        'Sin zona principal'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.separador} />
+
+              <View
+                style={
+                  styles.completitudEncabezado
+                }
+              >
+                <Text
+                  style={
+                    styles.completitudEtiqueta
+                  }
+                >
+                  Perfil completado
+                </Text>
+
+                <Text
+                  style={
+                    styles.completitudPorcentaje
+                  }
+                >
+                  {porcentaje}%
+                </Text>
+              </View>
+
+              <View
+                style={styles.barraContenedor}
+              >
+                <View
+                  style={[
+                    styles.barraProgreso,
+                    {
+                      width: `${porcentaje}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+
+            <View style={styles.tarjeta}>
+              <View style={styles.seccionTituloFila}>
+                <View style={styles.iconoSeccion}>
+                  <Ionicons
+                    name="person-circle-outline"
+                    size={22}
+                    color="#2563EB"
+                  />
+                </View>
+
+                <Text style={styles.seccionTitulo}>
+                  Descripción profesional
+                </Text>
+              </View>
+
+              <Text style={styles.textoContenido}>
+                {perfil.descripcionProfesional ||
+                  'Aún no has agregado una descripción profesional.'}
+              </Text>
+            </View>
+
+            <View style={styles.tarjeta}>
+              <View style={styles.seccionTituloFila}>
+                <View style={styles.iconoSeccion}>
+                  <Ionicons
+                    name="briefcase-outline"
+                    size={22}
+                    color="#2563EB"
+                  />
+                </View>
+
+                <Text style={styles.seccionTitulo}>
+                  Experiencia laboral
+                </Text>
+              </View>
+
+              <Text style={styles.textoContenido}>
+                {perfil.experienciaLaboral ||
+                  'Aún no has agregado tu experiencia laboral.'}
+              </Text>
+            </View>
+
+            <View style={styles.tarjeta}>
+              <View style={styles.seccionTituloFila}>
+                <View style={styles.iconoSeccion}>
+                  <Ionicons
+                    name="location-outline"
+                    size={22}
+                    color="#2563EB"
+                  />
+                </View>
+
+                <Text style={styles.seccionTitulo}>
+                  Zona principal
+                </Text>
+              </View>
+
+              <Text style={styles.zonaPrincipal}>
+                {perfil.localidad ||
+                  perfil.municipio ||
+                  'Sin localidad'}
+              </Text>
+
+              <Text style={styles.zonaSecundaria}>
+                {[
+                  perfil.municipio,
+                  perfil.departamento,
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+              </Text>
+            </View>
+
+            <Pressable
+              style={styles.botonEditar}
+              onPress={() =>
+                navigation.navigate(
+                  'EditarPerfilTrabajador',
+                  {
+                    perfil,
+                    modoCreacion: false,
+                  }
+                )
+              }
+            >
+              <Ionicons
+                name="create-outline"
+                size={21}
+                color="#2563EB"
+              />
+
+              <Text
+                style={styles.botonEditarTexto}
+              >
+                Editar perfil profesional
+              </Text>
+            </Pressable>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#12344D',
-  },
-
-  header: {
-    backgroundColor: '#12344D',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
-  },
-
-  botonVolver: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: '#1E506B',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 13,
-  },
-
-  headerTexto: {
-    flex: 1,
-  },
-
-  tituloHeader: {
-    color: '#FFFFFF',
-    fontSize: 21,
-    fontWeight: '800',
-  },
-
-  subtituloHeader: {
-    color: '#D6E4EC',
-    fontSize: 12,
-    marginTop: 2,
-  },
-
-  botonEditarHeader: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: '#1E506B',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  scroll: {
+  contenedor: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
   },
-
-  contenido: {
-    padding: 20,
-    paddingBottom: 36,
-  },
-
-  tarjetaPerfil: {
+  encabezado: {
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  avatar: {
-    width: 70,
-    height: 70,
-    borderRadius: 20,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-
-  datosPrincipales: {
-    flex: 1,
-  },
-
-  oficio: {
-    color: '#172B3A',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-
-  nombreTrabajador: {
-    color: '#64748B',
-    fontSize: 13,
-    marginTop: 4,
-  },
-
-  ubicacion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    gap: 4,
-  },
-
-  textoUbicacion: {
-    color: '#64748B',
-    fontSize: 12,
-    flex: 1,
-  },
-
-  tarjetaCompletitud: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 18,
-    marginTop: 15,
-  },
-
-  filaCompletitud: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAECF0',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-
-  tituloCompletitud: {
-    color: '#172B3A',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-
-  subtituloCompletitud: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 3,
-  },
-
-  porcentaje: {
-    color: '#0D9488',
-    fontSize: 22,
-    fontWeight: '900',
-  },
-
-  barraFondo: {
-    height: 9,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 10,
-    marginTop: 14,
-    overflow: 'hidden',
-  },
-
-  barraProgreso: {
-    height: '100%',
-    backgroundColor: '#0D9488',
-    borderRadius: 10,
-  },
-
-  seccion: {
-    marginTop: 25,
-  },
-
-  tituloSeccion: {
-    color: '#172B3A',
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 10,
-  },
-
-  tarjeta: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 15,
+  encabezadoPrincipal: {
+    flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 10,
+    alignItems: 'center',
   },
-
-  iconoSeccion: {
+  botonVolver: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+  encabezadoTexto: {
+    flex: 1,
+  },
+  titulo: {
+    fontSize: 23,
+    fontWeight: '700',
+    color: '#101828',
+  },
+  subtitulo: {
+    marginTop: 3,
+    fontSize: 12,
+    color: '#667085',
+  },
+  botonEditarSuperior: {
     width: 44,
     height: 44,
     borderRadius: 13,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
+    backgroundColor: '#2563EB',
     alignItems: 'center',
-    marginRight: 13,
+    justifyContent: 'center',
+    marginLeft: 10,
   },
-
-  contenidoTarjeta: {
+  scroll: {
     flex: 1,
   },
-
-  tituloCampo: {
-    color: '#172B3A',
-    fontSize: 14,
-    fontWeight: '800',
+  contenido: {
+    padding: 18,
+    paddingBottom: 40,
+    flexGrow: 1,
   },
-
-  valorCampo: {
-    color: '#64748B',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 5,
+  centro: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  botonEditar: {
-    minHeight: 54,
-    backgroundColor: '#0D9488',
-    borderRadius: 15,
+  textoCarga: {
+    marginTop: 12,
+    color: '#667085',
+  },
+  tarjetaPrincipal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 17,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+  },
+  perfilSuperior: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 20,
   },
-
-  textoBotonEditar: {
-    color: '#FFFFFF',
+  foto: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: '#F2F4F7',
+  },
+  fotoVacia: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  datosPrincipales: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  oficio: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#101828',
+  },
+  ubicacionFila: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 7,
+  },
+  ubicacionTexto: {
+    flex: 1,
+    marginLeft: 5,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#667085',
+  },
+  separador: {
+    height: 1,
+    backgroundColor: '#EAECF0',
+    marginVertical: 16,
+  },
+  completitudEncabezado: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  completitudEtiqueta: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475467',
+  },
+  completitudPorcentaje: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
+    color: '#2563EB',
   },
-
-  cargandoContainer: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    justifyContent: 'center',
+  barraContenedor: {
+    height: 9,
+    borderRadius: 10,
+    backgroundColor: '#EAECF0',
+    overflow: 'hidden',
+    marginTop: 9,
+  },
+  barraProgreso: {
+    height: '100%',
+    borderRadius: 10,
+    backgroundColor: '#2563EB',
+  },
+  tarjeta: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 17,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+  },
+  seccionTituloFila: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-
-  textoCargando: {
-    color: '#64748B',
+  iconoSeccion: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+  seccionTitulo: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#101828',
+  },
+  textoContenido: {
+    marginTop: 14,
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#475467',
+  },
+  zonaPrincipal: {
+    marginTop: 14,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#101828',
+  },
+  zonaSecundaria: {
+    marginTop: 4,
     fontSize: 13,
-    marginTop: 12,
+    color: '#667085',
   },
-
-  mensajeContainer: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    justifyContent: 'center',
+  botonEditar: {
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 30,
+    justifyContent: 'center',
   },
-
+  botonEditarTexto: {
+    marginLeft: 7,
+    color: '#2563EB',
+    fontWeight: '700',
+  },
+  vacio: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 60,
+  },
   iconoVacio: {
-    width: 82,
-    height: 82,
-    borderRadius: 25,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
-    marginBottom: 18,
+    justifyContent: 'center',
   },
-
-  mensajeTitulo: {
-    color: '#172B3A',
-    fontSize: 18,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginTop: 12,
+  vacioTitulo: {
+    marginTop: 18,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#101828',
   },
-
-  mensajeTexto: {
-    color: '#64748B',
-    fontSize: 13,
+  vacioTexto: {
+    marginTop: 8,
+    color: '#667085',
     lineHeight: 20,
     textAlign: 'center',
-    marginTop: 8,
   },
-
-  botonPrincipal: {
-    minHeight: 52,
-    backgroundColor: '#0D9488',
-    borderRadius: 15,
-    paddingHorizontal: 22,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
+  botonCrear: {
     marginTop: 22,
+    minHeight: 50,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  textoBotonPrincipal: {
+  botonCrearTexto: {
+    marginLeft: 7,
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
+  },
+  errorContenedor: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  errorTitulo: {
+    marginTop: 13,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#101828',
+  },
+  errorTexto: {
+    marginTop: 7,
+    color: '#667085',
+    textAlign: 'center',
+  },
+  botonReintentar: {
+    marginTop: 18,
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    paddingHorizontal: 17,
+    paddingVertical: 11,
+  },
+  botonReintentarTexto: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

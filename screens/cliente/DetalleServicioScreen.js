@@ -5,6 +5,7 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { servicioService } from '../../services/servicioService';
 import { disponibilidadService } from '../../services/disponibilidadService';
 import { zonaCoberturaService } from '../../services/zonaCoberturaService';
+import { userService } from '../../services/userService';
+import { reputacionService } from '../../services/reputacionService';
 
 const NOMBRES_DIAS = {
   LUNES: 'Lunes',
@@ -38,6 +41,16 @@ export default function DetalleServicioScreen({
   const [disponibilidades, setDisponibilidades] =
     useState([]);
   const [zonas, setZonas] = useState([]);
+  const [perfilTrabajador, setPerfilTrabajador] =
+    useState(null);
+  const [usuarioTrabajador, setUsuarioTrabajador] =
+    useState(null);
+  const [reputacion, setReputacion] =
+    useState(null);
+  const [
+    totalServiciosTrabajador,
+    setTotalServiciosTrabajador,
+  ] = useState(0);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
@@ -107,6 +120,85 @@ export default function DetalleServicioScreen({
       } else {
         setZonas([]);
       }
+
+      const perfilId = Number(
+        servicioActual.perfilTrabajadorId
+      );
+
+      if (
+        Number.isInteger(perfilId) &&
+        perfilId > 0
+      ) {
+        try {
+          const perfil =
+            await servicioService.obtenerPerfilTrabajadorPorId(
+              perfilId
+            );
+
+          setPerfilTrabajador(perfil);
+
+          const trabajadorId = Number(
+            perfil?.trabajadorId
+          );
+
+          if (
+            Number.isInteger(trabajadorId) &&
+            trabajadorId > 0
+          ) {
+            try {
+              const usuario =
+                await userService.obtenerUsuarioPorId(
+                  trabajadorId
+                );
+
+              setUsuarioTrabajador(usuario);
+            } catch {
+              setUsuarioTrabajador(null);
+            }
+          } else {
+            setUsuarioTrabajador(null);
+          }
+        } catch {
+          setPerfilTrabajador(null);
+          setUsuarioTrabajador(null);
+        }
+
+        try {
+          const reputacionObtenida =
+            await reputacionService.obtenerPorPerfilTrabajador(
+              perfilId
+            );
+
+          setReputacion(
+            reputacionObtenida
+          );
+        } catch {
+          setReputacion(null);
+        }
+
+        try {
+          const paginaServicios =
+            await servicioService.listarPorTrabajador(
+              perfilId,
+              0,
+              1
+            );
+
+          setTotalServiciosTrabajador(
+            Number(
+              paginaServicios?.totalElementos ??
+                0
+            )
+          );
+        } catch {
+          setTotalServiciosTrabajador(0);
+        }
+      } else {
+        setPerfilTrabajador(null);
+        setUsuarioTrabajador(null);
+        setReputacion(null);
+        setTotalServiciosTrabajador(0);
+      }
     } catch (err) {
       const data = err?.response?.data;
 
@@ -162,6 +254,80 @@ export default function DetalleServicioScreen({
     }
 
     return hora.substring(0, 5);
+  };
+
+  const obtenerCalificacion = () => {
+    if (
+      !reputacion ||
+      Number(reputacion.totalResenas) <= 0
+    ) {
+      return 'Nuevo';
+    }
+
+    return Number(
+      reputacion.promedioCalificacion ?? 0
+    ).toFixed(1);
+  };
+
+  const obtenerTextoResenas = () => {
+    const total = Number(
+      reputacion?.totalResenas ?? 0
+    );
+
+    if (total <= 0) {
+      return 'Sin reseñas todavía';
+    }
+
+    return total === 1
+      ? '1 reseña'
+      : `${total} reseñas`;
+  };
+
+  const irPerfilTrabajador = () => {
+    const trabajadorId = Number(
+      perfilTrabajador?.trabajadorId
+    );
+
+    if (
+      !Number.isInteger(trabajadorId) ||
+      trabajadorId <= 0
+    ) {
+      return;
+    }
+
+    navigation.navigate(
+      'PerfilPublicoTrabajador',
+      {
+        trabajadorId,
+      }
+    );
+  };
+
+  const solicitarServicio = () => {
+    const trabajadorId = Number(
+      perfilTrabajador?.trabajadorId
+    );
+
+    if (
+      !Number.isInteger(trabajadorId) ||
+      trabajadorId <= 0
+    ) {
+      return;
+    }
+
+    navigation.navigate(
+      'CrearSolicitud',
+      {
+        servicioId: servicio.id,
+        trabajadorId,
+        perfilTrabajadorId:
+          servicio.perfilTrabajadorId,
+        servicioTitulo: servicio.titulo,
+        trabajadorNombre:
+          usuarioTrabajador?.nombre ||
+          'Trabajador',
+      }
+    );
   };
 
   if (cargando) {
@@ -412,6 +578,181 @@ export default function DetalleServicioScreen({
           )}
         </View>
 
+        {perfilTrabajador ? (
+          <View style={styles.tarjetaProfesional}>
+            <View style={styles.profesionalEncabezado}>
+              <Text style={styles.profesionalTitulo}>
+                Profesional
+              </Text>
+
+              <Text style={styles.profesionalSubtitulo}>
+                Conoce quién ofrece este servicio
+              </Text>
+            </View>
+
+            <View style={styles.profesionalContenido}>
+              {perfilTrabajador.fotoUrl ? (
+                <Image
+                  source={{
+                    uri: perfilTrabajador.fotoUrl,
+                  }}
+                  style={styles.profesionalFoto}
+                />
+              ) : (
+                <View
+                  style={styles.profesionalFotoVacia}
+                >
+                  <Ionicons
+                    name="person"
+                    size={30}
+                    color="#2563EB"
+                  />
+                </View>
+              )}
+
+              <View
+                style={styles.profesionalInformacion}
+              >
+                <Text style={styles.profesionalNombre}>
+                  {usuarioTrabajador?.nombre ||
+                    'Trabajador'}
+                </Text>
+
+                <Text style={styles.profesionalOficio}>
+                  {perfilTrabajador.oficioPrincipal ||
+                    'Profesional'}
+                </Text>
+
+                <View style={styles.reputacionFila}>
+                  <Ionicons
+                    name="star"
+                    size={17}
+                    color="#F59E0B"
+                  />
+
+                  <Text style={styles.reputacionValor}>
+                    {obtenerCalificacion()}
+                  </Text>
+
+                  <Text style={styles.reputacionResenas}>
+                    {obtenerTextoResenas()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {perfilTrabajador.descripcionProfesional ? (
+              <Text
+                style={styles.profesionalDescripcion}
+                numberOfLines={4}
+              >
+                {
+                  perfilTrabajador.descripcionProfesional
+                }
+              </Text>
+            ) : null}
+
+            <View style={styles.datosConfianza}>
+              <View style={styles.datoConfianza}>
+                <Ionicons
+                  name="briefcase-outline"
+                  size={20}
+                  color="#0D9488"
+                />
+
+                <Text
+                  style={styles.datoConfianzaNumero}
+                >
+                  {totalServiciosTrabajador}
+                </Text>
+
+                <Text
+                  style={styles.datoConfianzaTexto}
+                >
+                  Servicios
+                </Text>
+              </View>
+
+              <View style={styles.separadorConfianza} />
+
+              <View style={styles.datoConfianza}>
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={20}
+                  color="#0D9488"
+                />
+
+                <Text
+                  style={styles.datoConfianzaNumero}
+                >
+                  {reputacion?.totalResenas ?? 0}
+                </Text>
+
+                <Text
+                  style={styles.datoConfianzaTexto}
+                >
+                  Reseñas
+                </Text>
+              </View>
+
+              <View style={styles.separadorConfianza} />
+
+              <View style={styles.datoConfianza}>
+                <Ionicons
+                  name="ribbon-outline"
+                  size={20}
+                  color="#0D9488"
+                />
+
+                <Text
+                  style={styles.datoConfianzaInsignia}
+                  numberOfLines={2}
+                >
+                  {(
+                    reputacion?.insignia ||
+                    'NUEVO_TRABAJADOR'
+                  ).replaceAll('_', ' ')}
+                </Text>
+              </View>
+            </View>
+
+            <Pressable
+              style={styles.botonVerPerfil}
+              onPress={irPerfilTrabajador}
+            >
+              <View style={styles.botonVerPerfilIzquierda}>
+                <Ionicons
+                  name="person-circle-outline"
+                  size={21}
+                  color="#2563EB"
+                />
+
+                <Text
+                  style={styles.botonVerPerfilTexto}
+                >
+                  Ver perfil del trabajador
+                </Text>
+              </View>
+
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color="#2563EB"
+              />
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.tarjetaProfesional}>
+            <Text style={styles.profesionalTitulo}>
+              Profesional
+            </Text>
+
+            <Text style={styles.sinInformacionProfesional}>
+              No se pudo cargar la información pública del trabajador.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.informacionFinal}>
           <Ionicons
             name="shield-checkmark-outline"
@@ -420,9 +761,31 @@ export default function DetalleServicioScreen({
           />
 
           <Text style={styles.informacionFinalTexto}>
-            Consulta la información del servicio antes de realizar una solicitud.
+            Revisa el perfil, experiencia y reseñas del profesional antes de realizar tu solicitud.
           </Text>
         </View>
+
+        <Pressable
+          style={[
+            styles.botonSolicitar,
+            !perfilTrabajador?.trabajadorId &&
+              styles.botonSolicitarDeshabilitado,
+          ]}
+          disabled={
+            !perfilTrabajador?.trabajadorId
+          }
+          onPress={solicitarServicio}
+        >
+          <Ionicons
+            name="paper-plane-outline"
+            size={21}
+            color="#FFFFFF"
+          />
+
+          <Text style={styles.botonSolicitarTexto}>
+            Solicitar servicio
+          </Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -609,6 +972,143 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#667085',
   },
+  tarjetaProfesional: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 14,
+  },
+  profesionalEncabezado: {
+    marginBottom: 16,
+  },
+  profesionalTitulo: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#101828',
+  },
+  profesionalSubtitulo: {
+    marginTop: 3,
+    fontSize: 12,
+    color: '#667085',
+  },
+  profesionalContenido: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profesionalFoto: {
+    width: 66,
+    height: 66,
+    borderRadius: 20,
+    backgroundColor: '#F2F4F7',
+  },
+  profesionalFotoVacia: {
+    width: 66,
+    height: 66,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profesionalInformacion: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  profesionalNombre: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#101828',
+  },
+  profesionalOficio: {
+    marginTop: 3,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0D9488',
+  },
+  reputacionFila: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reputacionValor: {
+    marginLeft: 5,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#344054',
+  },
+  reputacionResenas: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: '#667085',
+  },
+  profesionalDescripcion: {
+    marginTop: 15,
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#475467',
+  },
+  datosConfianza: {
+    marginTop: 17,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#F2F4F7',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  datoConfianza: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  separadorConfianza: {
+    width: 1,
+    backgroundColor: '#EAECF0',
+  },
+  datoConfianzaNumero: {
+    marginTop: 5,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#101828',
+  },
+  datoConfianzaTexto: {
+    marginTop: 2,
+    fontSize: 10,
+    color: '#667085',
+  },
+  datoConfianzaInsignia: {
+    marginTop: 5,
+    paddingHorizontal: 4,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: '#0D9488',
+  },
+  botonVerPerfil: {
+    minHeight: 49,
+    paddingTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  botonVerPerfilIzquierda: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  botonVerPerfilTexto: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  sinInformacionProfesional: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#667085',
+  },
   informacionFinal: {
     backgroundColor: '#EFF6FF',
     borderRadius: 14,
@@ -622,6 +1122,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: '#1D4ED8',
+  },
+  botonSolicitar: {
+    minHeight: 56,
+    marginTop: 16,
+    borderRadius: 14,
+    backgroundColor: '#2563EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botonSolicitarDeshabilitado: {
+    opacity: 0.5,
+  },
+  botonSolicitarTexto: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   errorContenedor: {
     flex: 1,

@@ -18,6 +18,63 @@ export default function HomeTrabajadorScreen({ navigation }) {
     await cerrarSesion();
   };
 
+  const opciones = [
+    {
+      titulo: 'Mis servicios',
+      descripcion: 'Publica y administra los servicios que ofreces.',
+      icono: 'briefcase-outline',
+      ruta: 'MisServicios',
+    },
+    {
+      titulo: 'Solicitudes',
+      descripcion: 'Consulta las solicitudes recibidas de clientes.',
+      icono: 'document-text-outline',
+      ruta: 'SolicitudesRecibidas',
+    },
+    {
+      titulo: 'Mensajes',
+      descripcion: 'Comunícate con los clientes interesados.',
+      icono: 'chatbubbles-outline',
+      ruta: 'Conversaciones',
+    },
+    {
+      titulo: 'Perfil profesional',
+      descripcion: 'Administra la información de tu perfil profesional.',
+      icono: 'person-circle-outline',
+      ruta: 'MiPerfilProfesional',
+    },
+    {
+      titulo: 'Notificaciones',
+      descripcion: 'Consulta novedades y avisos relacionados con tu trabajo.',
+      icono: 'notifications-outline',
+      ruta: 'NotificacionesTrabajador',
+    },
+    {
+      titulo: 'Promociones',
+      descripcion: 'Consulta y administra las promociones disponibles.',
+      icono: 'megaphone-outline',
+      ruta: 'Promociones',
+    },
+    {
+      titulo: 'Historial de pagos',
+      descripcion: 'Consulta la información relacionada con tus pagos.',
+      icono: 'card-outline',
+      ruta: 'HistorialPagos',
+    },
+    {
+      titulo: 'Reputación',
+      descripcion: 'Consulta tu reputación y reconocimiento como trabajador.',
+      icono: 'star-outline',
+      ruta: 'Reputacion',
+    },
+    {
+      titulo: 'Ajustes',
+      descripcion: 'Ajustes de Seguridad y cierre de sesion',
+      icono: 'settings-outline',
+      ruta: 'PerfilTrabajador',
+    },
+  ];
+
   return (
     <SafeAreaView
       style={styles.container}
@@ -89,95 +146,30 @@ export default function HomeTrabajadorScreen({ navigation }) {
           </Text>
 
           <View style={styles.grid}>
-            <TouchableOpacity
-              style={styles.tarjeta}
-              onPress={() =>
-                navigation.navigate('MisServicios')
-              }
-              activeOpacity={0.8}
-            >
-              <View style={styles.icono}>
-                <Ionicons
-                  name="briefcase-outline"
-                  size={25}
-                  color="#0D9488"
-                />
-              </View>
+            {opciones.map((opcion) => (
+              <TouchableOpacity
+                key={opcion.ruta}
+                style={styles.tarjeta}
+                onPress={() => navigation.navigate(opcion.ruta)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.icono}>
+                  <Ionicons
+                    name={opcion.icono}
+                    size={25}
+                    color="#0D9488"
+                  />
+                </View>
 
-              <Text style={styles.tituloTarjeta}>
-                Mis servicios
-              </Text>
+                <Text style={styles.tituloTarjeta}>
+                  {opcion.titulo}
+                </Text>
 
-              <Text style={styles.descripcionTarjeta}>
-                Publica y administra los servicios que ofreces.
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.tarjeta}
-              activeOpacity={0.8}
-            >
-              <View style={styles.icono}>
-                <Ionicons
-                  name="document-text-outline"
-                  size={25}
-                  color="#0D9488"
-                />
-              </View>
-
-              <Text style={styles.tituloTarjeta}>
-                Solicitudes
-              </Text>
-
-              <Text style={styles.descripcionTarjeta}>
-                Consulta las solicitudes recibidas de clientes.
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.tarjeta}
-              activeOpacity={0.8}
-            >
-              <View style={styles.icono}>
-                <Ionicons
-                  name="chatbubbles-outline"
-                  size={25}
-                  color="#0D9488"
-                />
-              </View>
-
-              <Text style={styles.tituloTarjeta}>
-                Mensajes
-              </Text>
-
-              <Text style={styles.descripcionTarjeta}>
-                Comunícate con los clientes interesados.
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.tarjeta}
-              onPress={() =>
-                navigation.navigate('PerfilTrabajador')
-              }
-              activeOpacity={0.8}
-            >
-              <View style={styles.icono}>
-                <Ionicons
-                  name="person-circle-outline"
-                  size={25}
-                  color="#0D9488"
-                />
-              </View>
-
-              <Text style={styles.tituloTarjeta}>
-                Perfil profesional
-              </Text>
-
-              <Text style={styles.descripcionTarjeta}>
-                Administra la información de tu perfil de trabajador.
-              </Text>
-            </TouchableOpacity>
+                <Text style={styles.descripcionTarjeta}>
+                  {opcion.descripcion}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
@@ -323,6 +315,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     padding: 16,
+    marginBottom: 14,
   },
   icono: {
     width: 44,

@@ -1,84 +1,294 @@
 import apiJava from './apiJava';
 
-/**
- * Endpoints del modulo de conversaciones.
- *
- * Nota: el controlador Conversacion (CON-127) aun no esta publicado en la
- * API Java. Las rutas siguen la convencion vigente del backend y se
- * centralizan aqui para ajustarse si difieren.
- */
-const RUTAS = {
-  base: '/api/conversaciones',
-  solicitud: '/api/conversaciones/solicitud/{solicitudId}',
+const TAMANIO_PAGINA = 20;
+
+const normalizarConversacion = (conversacion) => {
+  if (!conversacion) {
+    return null;
+  }
+
+  return {
+    id:
+      conversacion.id ??
+      conversacion.idConversacion ??
+      null,
+
+    solicitudId:
+      conversacion.solicitudId ??
+      null,
+
+    clienteId:
+      conversacion.clienteId ??
+      null,
+
+    trabajadorId:
+      conversacion.trabajadorId ??
+      null,
+
+    fechaCreacion:
+      conversacion.fechaCreacion ??
+      null,
+
+    puedeEnviarMensajes:
+      Boolean(
+        conversacion.puedeEnviarMensajes
+      ),
+  };
 };
 
-const obtenerMensajeError = (error, mensajeAlternativo) => {
-  return (
-    error?.response?.data?.message ||
-    error?.response?.data?.mensaje ||
-    error?.response?.data?.title ||
-    error?.response?.data?.detail ||
-    mensajeAlternativo
+const normalizarPagina = (
+  data,
+  paginaSolicitada = 0,
+  tamanioSolicitado = TAMANIO_PAGINA
+) => {
+  const contenido =
+    data?.contenido ??
+    data?.content ??
+    data?.items ??
+    [];
+
+  const pagina =
+    data?.pagina ??
+    data?.page ??
+    data?.number ??
+    paginaSolicitada;
+
+  const tamanio =
+    data?.tamanio ??
+    data?.size ??
+    data?.pageSize ??
+    tamanioSolicitado;
+
+  const totalElementos =
+    data?.totalElementos ??
+    data?.totalElements ??
+    data?.totalItems ??
+    contenido.length;
+
+  const totalPaginas =
+    data?.totalPaginas ??
+    data?.totalPages ??
+    (
+      totalElementos > 0
+        ? Math.ceil(
+            totalElementos / tamanio
+          )
+        : 0
+    );
+
+  const ultima =
+    data?.ultima ??
+    data?.last ??
+    (
+      totalPaginas === 0 ||
+      Number(pagina) >=
+        Number(totalPaginas) - 1
+    );
+
+  return {
+    contenido: Array.isArray(contenido)
+      ? contenido
+          .map(normalizarConversacion)
+          .filter(Boolean)
+      : [],
+
+    pagina:
+      Number(pagina) || 0,
+
+    tamanio:
+      Number(tamanio) ||
+      tamanioSolicitado,
+
+    totalElementos:
+      Number(totalElementos) || 0,
+
+    totalPaginas:
+      Number(totalPaginas) || 0,
+
+    primera:
+      data?.primera ??
+      data?.first ??
+      Number(pagina) === 0,
+
+    ultima:
+      Boolean(ultima),
+
+    vacia:
+      data?.vacia ??
+      data?.empty ??
+      contenido.length === 0,
+  };
+};
+
+const crearConversacion = async (
+  solicitudId,
+  options = {}
+) => {
+  const id = Number(solicitudId);
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    throw new Error(
+      'El identificador de la solicitud no es válido.'
+    );
+  }
+
+  const response = await apiJava.post(
+    '/api/conversaciones',
+    {
+      solicitudId: id,
+    },
+    options
+  );
+
+  return normalizarConversacion(
+    response.data
+  );
+};
+
+const obtenerConversacionesPaginadas = async (
+  {
+    pagina = 0,
+    tamanio = TAMANIO_PAGINA,
+    solicitudId = null,
+    estadoSolicitud = null,
+    fechaDesde = null,
+    fechaHasta = null,
+    puedeEnviarMensajes = null,
+  } = {},
+  options = {}
+) => {
+  const params = {
+    page: pagina,
+    size: tamanio,
+  };
+
+  if (solicitudId) {
+    params.solicitudId =
+      solicitudId;
+  }
+
+  if (estadoSolicitud) {
+    params.estadoSolicitud =
+      estadoSolicitud;
+  }
+
+  if (fechaDesde) {
+    params.fechaDesde =
+      fechaDesde;
+  }
+
+  if (fechaHasta) {
+    params.fechaHasta =
+      fechaHasta;
+  }
+
+  if (
+    puedeEnviarMensajes !== null &&
+    puedeEnviarMensajes !== undefined
+  ) {
+    params.puedeEnviarMensajes =
+      puedeEnviarMensajes;
+  }
+
+  const response = await apiJava.get(
+    '/api/conversaciones/paginadas',
+    {
+      ...options,
+      params: {
+        ...params,
+        ...(options.params ?? {}),
+      },
+    }
+  );
+
+  return normalizarPagina(
+    response.data,
+    pagina,
+    tamanio
+  );
+};
+
+const obtenerConversacionPorId = async (
+  id,
+  options = {}
+) => {
+  const conversacionId = Number(id);
+
+  if (
+    !Number.isInteger(conversacionId) ||
+    conversacionId <= 0
+  ) {
+    throw new Error(
+      'El identificador de la conversación no es válido.'
+    );
+  }
+
+  const response = await apiJava.get(
+    `/api/conversaciones/${conversacionId}`,
+    options
+  );
+
+  return normalizarConversacion(
+    response.data
+  );
+};
+
+const obtenerConversacionPorSolicitud = async (
+  solicitudId,
+  options = {}
+) => {
+  const id = Number(solicitudId);
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    throw new Error(
+      'El identificador de la solicitud no es válido.'
+    );
+  }
+
+  const response = await apiJava.get(
+    `/api/conversaciones/solicitud/${id}`,
+    options
+  );
+
+  return normalizarConversacion(
+    response.data
+  );
+};
+
+const obtenerOCrearPorSolicitud = async (
+  solicitudId,
+  options = {}
+) => {
+  try {
+    return await obtenerConversacionPorSolicitud(
+      solicitudId,
+      options
+    );
+  } catch (error) {
+    if (error?.response?.status !== 404) {
+      throw error;
+    }
+  }
+
+  return crearConversacion(
+    solicitudId,
+    options
   );
 };
 
 export const conversacionService = {
-  /**
-   * Lista las conversaciones del usuario autenticado, tanto si actúa
-   * como Cliente o como Trabajador.
-   */
-  listar: async () => {
-    try {
-      const response = await apiJava.get(RUTAS.base);
-      return Array.isArray(response.data) ? response.data : [];
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudieron cargar tus conversaciones.'
-        )
-      );
-    }
-  },
-
-  /**
-   * Obtiene una conversacion por su identificador.
-   */
-  obtenerPorId: async (conversacionId) => {
-    try {
-      const response = await apiJava.get(
-        `${RUTAS.base}/${conversacionId}`
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se pudo cargar la conversación.'
-        )
-      );
-    }
-  },
-
-  /**
-   * Obtiene la conversacion asociada a una solicitud de servicio.
-   */
-  obtenerPorSolicitud: async (solicitudId) => {
-    try {
-      const response = await apiJava.get(
-        RUTAS.solicitud.replace(
-          '{solicitudId}',
-          String(solicitudId)
-        )
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error(
-        obtenerMensajeError(
-          error,
-          'No se encontró una conversación para esta solicitud.'
-        )
-      );
-    }
-  },
+  TAMANIO_PAGINA,
+  crearConversacion,
+  obtenerConversacionesPaginadas,
+  obtenerConversacionPorId,
+  obtenerConversacionPorSolicitud,
+  obtenerOCrearPorSolicitud,
 };
+
+export default conversacionService;

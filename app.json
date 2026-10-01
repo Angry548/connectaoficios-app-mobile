@@ -21,7 +21,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ConnectaOficios necesita acceso a tus fotos para seleccionar tu fotografía de perfil."
+        }
+      ]
     ]
   }
 }

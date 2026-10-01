@@ -1,18 +1,25 @@
-import React, { useCallback, useState } from 'react';
+import React, {
+  useCallback,
+  useState,
+} from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  Keyboard,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
+  View,
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { solicitudService } from '../../services/solicitudService';
+import { userService } from '../../services/userService';
 
 const ESTADOS = {
   PENDIENTE: {
@@ -53,60 +60,6 @@ const ESTADOS = {
   },
 };
 
-/**
- * Transiciones permitidas por la API:
- * Pendiente -> Aceptada / Rechazada
- * Aceptada   -> En proceso / Cancelada
- * En proceso -> Completada / Cancelada
- */
-const TRANSICIONES = {
-  PENDIENTE: [
-    {
-      estado: 'ACEPTADA',
-      texto: 'Aceptar solicitud',
-      icono: 'checkmark-circle-outline',
-      estilo: 'primario',
-    },
-    {
-      estado: 'RECHAZADA',
-      texto: 'Rechazar solicitud',
-      icono: 'close-circle-outline',
-      estilo: 'peligro',
-    },
-  ],
-  ACEPTADA: [
-    {
-      estado: 'EN_PROCESO',
-      texto: 'Iniciar trabajo',
-      icono: 'play-circle-outline',
-      estilo: 'primario',
-    },
-    {
-      estado: 'CANCELADA',
-      texto: 'Cancelar solicitud',
-      icono: 'ban-outline',
-      estilo: 'peligro',
-    },
-  ],
-  EN_PROCESO: [
-    {
-      estado: 'COMPLETADA',
-      texto: 'Marcar como completada',
-      icono: 'checkmark-done-outline',
-      estilo: 'primario',
-    },
-    {
-      estado: 'CANCELADA',
-      texto: 'Cancelar solicitud',
-      icono: 'ban-outline',
-      estilo: 'peligro',
-    },
-  ],
-  COMPLETADA: [],
-  RECHAZADA: [],
-  CANCELADA: [],
-};
-
 const obtenerEstiloEstado = (estado) => {
   return (
     ESTADOS[String(estado || '').toUpperCase()] || {
@@ -121,6 +74,11 @@ const obtenerEstiloEstado = (estado) => {
 const formatearFecha = (valor, conHora = false) => {
   if (!valor) {
     return 'Sin definir';
+  }
+
+  if (!conHora && /^\d{4}-\d{2}-\d{2}$/.test(String(valor))) {
+    const [anio, mes, dia] = String(valor).split('-');
+    return `${dia}/${mes}/${anio}`;
   }
 
   const fecha = new Date(valor);
@@ -139,14 +97,22 @@ const formatearFecha = (valor, conHora = false) => {
     });
   }
 
-  return fecha.toLocaleDateString('es-SV', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  return fecha.toLocaleDateString('es-SV');
 };
 
-const FilaDato = ({ icono, etiqueta, valor }) => (
+const formatearHora = (valor) => {
+  if (!valor) {
+    return 'Sin definir';
+  }
+
+  return String(valor).substring(0, 5);
+};
+
+const FilaDato = ({
+  icono,
+  etiqueta,
+  valor,
+}) => (
   <View style={styles.filaDato}>
     <View style={styles.iconoDato}>
       <Ionicons
@@ -172,121 +138,220 @@ export default function DetalleSolicitudTrabajadorScreen({
   navigation,
   route,
 }) {
-  const solicitudId = route?.params?.solicitudId;
+  const solicitudId =
+    route?.params?.solicitudId;
 
-  const [solicitud, setSolicitud] = useState(null);
-  const [historial, setHistorial] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [procesando, setProcesando] = useState(null);
-  const [motivo, setMotivo] = useState('');
-  const [error, setError] = useState(null);
+  const [solicitud, setSolicitud] =
+    useState(null);
 
-  const cargarDetalle = useCallback(async () => {
-    try {
-      setError(null);
+  const [cliente, setCliente] =
+    useState(null);
 
-      const detalle = await solicitudService.obtenerDetalle(
-        solicitudId
-      );
+  const [cargando, setCargando] =
+    useState(true);
 
-      setSolicitud(detalle);
+  const [procesando, setProcesando] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const [
+    modalRechazoVisible,
+    setModalRechazoVisible,
+  ] = useState(false);
+
+  const [
+    motivoRechazo,
+    setMotivoRechazo,
+  ] = useState('');
+
+  const cargarDetalle = useCallback(
+    async () => {
+      if (!solicitudId) {
+        setError(
+          'No se recibió el identificador de la solicitud.'
+        );
+        setCargando(false);
+        return;
+      }
+
+      setError('');
 
       try {
-        const registros =
-          await solicitudService.obtenerHistorial(solicitudId);
+        const solicitudObtenida =
+          await solicitudService.obtenerSolicitudPorId(
+            solicitudId
+          );
 
-        setHistorial(registros);
-      } catch {
-        setHistorial([]);
+        setSolicitud(solicitudObtenida);
+
+        if (solicitudObtenida?.clienteId) {
+          try {
+            const usuario =
+              await userService.obtenerUsuarioPorId(
+                solicitudObtenida.clienteId
+              );
+
+            setCliente(usuario);
+          } catch {
+            setCliente(null);
+          }
+        }
+      } catch (excepcion) {
+        setError(
+          excepcion.message ||
+            'No se pudo cargar la solicitud.'
+        );
+      } finally {
+        setCargando(false);
       }
-    } catch (excepcion) {
-      setError(
-        excepcion.message ||
-          'No se pudo cargar el detalle de la solicitud.'
-      );
-    } finally {
-      setCargando(false);
-    }
-  }, [solicitudId]);
+    },
+    [solicitudId]
+  );
 
   React.useEffect(() => {
-    if (!solicitudId) {
-      setError(
-        'No fue posible identificar la solicitud solicitada.'
-      );
-      setCargando(false);
+    cargarDetalle();
+  }, [cargarDetalle]);
+
+  const ejecutarAccion = async (
+    tipo,
+    accion
+  ) => {
+    if (procesando) {
       return;
     }
 
-    cargarDetalle();
-  }, [solicitudId, cargarDetalle]);
-
-  const ejecutarCambioEstado = async (estado) => {
-    setProcesando(estado);
+    setProcesando(true);
 
     try {
-      if (estado === 'CANCELADA') {
-        await solicitudService.cancelar(solicitudId, motivo);
-        setMotivo('');
-      } else {
-        await solicitudService.cambiarEstado(solicitudId, estado);
-      }
+      await accion();
 
       await cargarDetalle();
+
+      Alert.alert(
+        'Solicitud actualizada',
+        `La solicitud fue marcada como ${tipo.toLowerCase()} correctamente.`
+      );
     } catch (excepcion) {
       Alert.alert(
-        'No se pudo actualizar la solicitud',
+        'No se pudo actualizar',
         excepcion.message ||
           'Inténtalo nuevamente en unos instantes.'
       );
     } finally {
-      setProcesando(null);
+      setProcesando(false);
     }
   };
 
-  const confirmarAccion = (accion) => {
-    if (accion.estado === 'CANCELADA') {
-      Alert.alert(
-        'Cancelar solicitud',
-        'Esta accion no se puede deshacer. Puedes indicar el motivo de la cancelacion.',
-        [
-          { text: 'Volver', style: 'cancel' },
-          {
-            text: 'Cancelar solicitud',
-            style: 'destructive',
-            onPress: () =>
-              ejecutarCambioEstado('CANCELADA'),
-          },
-        ]
-      );
-      return;
-    }
-
-    if (accion.estado === 'RECHAZADA') {
-      Alert.alert(
-        'Rechazar solicitud',
-        'La solicitud pasará a estado Rechazada y el cliente será notificado.',
-        [
-          { text: 'Volver', style: 'cancel' },
-          {
-            text: 'Rechazar',
-            style: 'destructive',
-            onPress: () =>
-              ejecutarCambioEstado('RECHAZADA'),
-          },
-        ]
-      );
-      return;
-    }
-
+  const confirmarAceptar = () => {
     Alert.alert(
-      accion.texto,
-      'Deseas actualizar el estado de la solicitud?',
+      'Aceptar solicitud',
+      '¿Deseas aceptar esta solicitud de servicio?',
       [
-        { text: 'Volver', style: 'cancel' },
         {
-          text: 'Confirmar',
-          onPress: () => ejecutarCambioEstado(accion.estado),
+          text: 'Volver',
+          style: 'cancel',
+        },
+        {
+          text: 'Aceptar',
+          onPress: () =>
+            ejecutarAccion(
+              'Aceptada',
+              () =>
+                solicitudService.aceptarSolicitud(
+                  solicitudId
+                )
+            ),
+        },
+      ]
+    );
+  };
+
+  const rechazar = async () => {
+    const motivo =
+      motivoRechazo.trim();
+
+    if (!motivo) {
+      Alert.alert(
+        'Motivo requerido',
+        'Debes indicar el motivo del rechazo.'
+      );
+      return;
+    }
+
+    Keyboard.dismiss();
+    setProcesando(true);
+
+    try {
+      await solicitudService.rechazarSolicitud(
+        solicitudId,
+        motivo
+      );
+
+      setMotivoRechazo('');
+      setModalRechazoVisible(false);
+
+      await cargarDetalle();
+
+      Alert.alert(
+        'Solicitud rechazada',
+        'La solicitud fue rechazada correctamente.'
+      );
+    } catch (excepcion) {
+      Alert.alert(
+        'No se pudo rechazar',
+        excepcion.message ||
+          'Inténtalo nuevamente.'
+      );
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const confirmarIniciar = () => {
+    Alert.alert(
+      'Iniciar servicio',
+      '¿Confirmas que deseas iniciar este servicio?',
+      [
+        {
+          text: 'Volver',
+          style: 'cancel',
+        },
+        {
+          text: 'Iniciar',
+          onPress: () =>
+            ejecutarAccion(
+              'En proceso',
+              () =>
+                solicitudService.iniciarSolicitud(
+                  solicitudId
+                )
+            ),
+        },
+      ]
+    );
+  };
+
+  const confirmarCompletar = () => {
+    Alert.alert(
+      'Completar servicio',
+      '¿Confirmas que el trabajo ha sido completado?',
+      [
+        {
+          text: 'Volver',
+          style: 'cancel',
+        },
+        {
+          text: 'Completar',
+          onPress: () =>
+            ejecutarAccion(
+              'Completada',
+              () =>
+                solicitudService.completarSolicitud(
+                  solicitudId
+                )
+            ),
         },
       ]
     );
@@ -297,10 +362,6 @@ export default function DetalleSolicitudTrabajadorScreen({
       solicitudId,
     });
   };
-
-  const chatDisponible = ['ACEPTADA', 'EN_PROCESO'].includes(
-    String(solicitud?.estado || '').toUpperCase()
-  );
 
   if (cargando) {
     return (
@@ -327,7 +388,7 @@ export default function DetalleSolicitudTrabajadorScreen({
     );
   }
 
-  if (error) {
+  if (error || !solicitud) {
     return (
       <SafeAreaView
         style={styles.container}
@@ -339,7 +400,7 @@ export default function DetalleSolicitudTrabajadorScreen({
         />
 
         <View style={styles.centro}>
-          <View style={[styles.iconoVacio, styles.iconoError]}>
+          <View style={styles.iconoError}>
             <Ionicons
               name="cloud-offline-outline"
               size={38}
@@ -347,27 +408,20 @@ export default function DetalleSolicitudTrabajadorScreen({
             />
           </View>
 
-          <Text style={styles.tituloVacio}>
+          <Text style={styles.tituloError}>
             No pudimos cargar la solicitud
           </Text>
 
-          <Text style={styles.textoVacio}>
+          <Text style={styles.textoError}>
             {error}
           </Text>
 
           <TouchableOpacity
-            style={styles.botonReintentar}
-            onPress={cargarDetalle}
-            activeOpacity={0.85}
+            style={styles.botonPrimario}
+            onPress={() => navigation.goBack()}
           >
-            <Ionicons
-              name="refresh-outline"
-              size={18}
-              color="#FFFFFF"
-            />
-
-            <Text style={styles.textoBotonReintentar}>
-              Reintentar
+            <Text style={styles.textoBoton}>
+              Volver
             </Text>
           </TouchableOpacity>
         </View>
@@ -375,12 +429,16 @@ export default function DetalleSolicitudTrabajadorScreen({
     );
   }
 
-  const estadoActual = String(
-    solicitud?.estado || ''
-  ).toUpperCase();
+  const estado =
+    String(solicitud.estado || '').toUpperCase();
 
-  const estiloEstado = obtenerEstiloEstado(estadoActual);
-  const acciones = TRANSICIONES[estadoActual] || [];
+  const estiloEstado =
+    obtenerEstiloEstado(estado);
+
+  const chatDisponible = [
+    'ACEPTADA',
+    'EN_PROCESO',
+  ].includes(estado);
 
   return (
     <SafeAreaView
@@ -407,11 +465,11 @@ export default function DetalleSolicitudTrabajadorScreen({
 
         <View style={styles.headerTexto}>
           <Text style={styles.tituloHeader}>
-            Solicitud #{String(solicitud?.id ?? '')}
+            Detalle de solicitud
           </Text>
 
           <Text style={styles.subtituloHeader}>
-            Gestiona el estado del trabajo
+            Solicitud #{solicitud.idSolicitud}
           </Text>
         </View>
       </View>
@@ -425,22 +483,24 @@ export default function DetalleSolicitudTrabajadorScreen({
           <View style={styles.iconoEstado}>
             <Ionicons
               name="briefcase-outline"
-              size={26}
+              size={25}
               color="#0D9488"
             />
           </View>
 
-          <View style={styles.estadoTexto}>
-            <Text style={styles.estadoServicio}>
-              {solicitud?.servicio?.nombre ||
-                solicitud?.servicioNombre ||
+          <View style={styles.estadoContenido}>
+            <Text style={styles.tituloServicio}>
+              {solicitud.servicioTitulo ||
                 'Servicio'}
             </Text>
 
             <View
               style={[
                 styles.badge,
-                { backgroundColor: estiloEstado.fondo },
+                {
+                  backgroundColor:
+                    estiloEstado.fondo,
+                },
               ]}
             >
               <Ionicons
@@ -452,7 +512,10 @@ export default function DetalleSolicitudTrabajadorScreen({
               <Text
                 style={[
                   styles.badgeTexto,
-                  { color: estiloEstado.color },
+                  {
+                    color:
+                      estiloEstado.color,
+                  },
                 ]}
               >
                 {estiloEstado.texto}
@@ -463,127 +526,105 @@ export default function DetalleSolicitudTrabajadorScreen({
 
         <View style={styles.tarjeta}>
           <Text style={styles.tituloSeccion}>
-            Datos del cliente
+            Información del cliente
           </Text>
 
           <FilaDato
             icono="person-outline"
             etiqueta="Cliente"
-            valor={solicitud?.clienteNombre}
+            valor={
+              cliente?.nombre ||
+              `Cliente #${solicitud.clienteId}`
+            }
           />
 
-          <FilaDato
-            icono="call-outline"
-            etiqueta="Contacto"
-            valor={solicitud?.clienteTelefono}
-          />
+          {cliente?.telefono ? (
+            <FilaDato
+              icono="call-outline"
+              etiqueta="Teléfono"
+              valor={cliente.telefono}
+            />
+          ) : null}
         </View>
 
         <View style={styles.tarjeta}>
           <Text style={styles.tituloSeccion}>
-            Detalle del trabajo
+            Información del servicio
           </Text>
 
           <FilaDato
             icono="calendar-outline"
             etiqueta="Fecha propuesta"
-            valor={formatearFecha(solicitud?.fechaPropuesta)}
+            valor={formatearFecha(
+              solicitud.fechaPropuesta
+            )}
           />
 
           <FilaDato
             icono="time-outline"
             etiqueta="Hora aproximada"
-            valor={solicitud?.horaAproximada}
+            valor={formatearHora(
+              solicitud.horaAproximada
+            )}
           />
 
           <FilaDato
             icono="location-outline"
-            etiqueta="Direccion"
-            valor={solicitud?.direccion}
+            etiqueta="Dirección"
+            valor={solicitud.direccionServicio}
           />
 
           <View style={styles.descripcion}>
             <Text style={styles.datoEtiqueta}>
-              Descripcion del trabajo
+              Descripción del trabajo
             </Text>
 
             <Text style={styles.descripcionTexto}>
-              {solicitud?.descripcionTrabajo ||
-                'Sin descripcion registrada'}
+              {solicitud.descripcionTrabajo ||
+                'Sin descripción registrada'}
             </Text>
           </View>
         </View>
 
-        {acciones.length > 0 ? (
-          <View style={styles.tarjetaAcciones}>
-            <Text style={styles.tituloSeccion}>
-              Acciones disponibles
-            </Text>
+        <View style={styles.tarjeta}>
+          <Text style={styles.tituloSeccion}>
+            Seguimiento
+          </Text>
 
-            {acciones.some(
-              (accion) => accion.estado === 'CANCELADA'
-            ) ? (
-              <TextInput
-                style={styles.inputMotivo}
-                placeholder="Motivo de la cancelacion (opcional)"
-                placeholderTextColor="#94A3B8"
-                value={motivo}
-                onChangeText={setMotivo}
-                editable={!procesando}
-              />
-            ) : null}
+          <FilaDato
+            icono="time-outline"
+            etiqueta="Solicitud recibida"
+            valor={formatearFecha(
+              solicitud.fechaCreacion,
+              true
+            )}
+          />
 
-            <View style={styles.accionesFila}>
-              {acciones.map((accion) => (
-                <TouchableOpacity
-                  key={accion.estado}
-                  style={[
-                    styles.botonAccion,
-                    accion.estilo === 'peligro'
-                      ? styles.botonPeligro
-                      : styles.botonPrimario,
-                    accion.estilo === 'peligro' &&
-                      styles.botonAccionAncho,
-                  ]}
-                  onPress={() =>
-                    confirmarAccion(accion)
-                  }
-                  disabled={!!procesando}
-                  activeOpacity={0.85}
-                >
-                  {procesando === accion.estado ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <>
-                      <Ionicons
-                        name={accion.icono}
-                        size={19}
-                        color="#FFFFFF"
-                      />
+          <FilaDato
+            icono="refresh-outline"
+            etiqueta="Última actualización"
+            valor={formatearFecha(
+              solicitud.fechaActualizacion,
+              true
+            )}
+          />
 
-                      <Text style={styles.textoBotonAccion}>
-                        {accion.texto}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        ) : (
-          <View style={styles.tarjetaCerrada}>
-            <Ionicons
-              name="information-circle-outline"
-              size={19}
-              color="#64748B"
+          {solicitud.motivoRechazo ? (
+            <FilaDato
+              icono="close-circle-outline"
+              etiqueta="Motivo del rechazo"
+              valor={solicitud.motivoRechazo}
             />
+          ) : null}
 
-            <Text style={styles.textoCerrada}>
-              Esta solicitud ya no admite cambios de
-              estado.
-            </Text>
-          </View>
-        )}
+          {solicitud.motivoCancelacion ? (
+            <FilaDato
+              icono="information-circle-outline"
+              etiqueta="Motivo de cancelación"
+              valor={solicitud.motivoCancelacion}
+            />
+          ) : null}
+        </View>
 
         {chatDisponible ? (
           <TouchableOpacity
@@ -592,69 +633,200 @@ export default function DetalleSolicitudTrabajadorScreen({
             activeOpacity={0.85}
           >
             <Ionicons
-              name="chatbubbles-outline"
-              size={19}
+              name="chatbubble-ellipses-outline"
+              size={20}
               color="#FFFFFF"
             />
 
-            <Text style={styles.textoBotonChat}>
-              Abrir chat con el cliente
+            <Text style={styles.textoBoton}>
+              Conversar con el cliente
             </Text>
           </TouchableOpacity>
         ) : null}
 
-        {historial.length > 0 ? (
-          <View style={styles.tarjeta}>
-            <Text style={styles.tituloSeccion}>
-              Historial de estados
-            </Text>
+        {estado === 'PENDIENTE' ? (
+          <View style={styles.acciones}>
+            <TouchableOpacity
+              style={[
+                styles.botonAceptar,
+                procesando &&
+                  styles.botonDeshabilitado,
+              ]}
+              onPress={confirmarAceptar}
+              disabled={procesando}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={21}
+                color="#FFFFFF"
+              />
 
-            {historial.map((registro, indice) => {
-              const estiloRegistro = obtenerEstiloEstado(
-                registro.estado
-              );
+              <Text style={styles.textoBoton}>
+                Aceptar solicitud
+              </Text>
+            </TouchableOpacity>
 
-              return (
-                <View
-                  key={
-                    registro.id ?? `${registro.estado}-${indice}`
-                  }
-                  style={styles.lineaHistorial}
-                >
-                  <View style={styles.marcaHistorial}>
-                    <View
-                      style={[
-                        styles.puntoHistorial,
-                        {
-                          backgroundColor: estiloRegistro.color,
-                        },
-                      ]}
-                    />
+            <TouchableOpacity
+              style={[
+                styles.botonRechazar,
+                procesando &&
+                  styles.botonDeshabilitado,
+              ]}
+              onPress={() =>
+                setModalRechazoVisible(true)
+              }
+              disabled={procesando}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="close-circle-outline"
+                size={21}
+                color="#DC2626"
+              />
 
-                    {indice < historial.length - 1 ? (
-                      <View style={styles.lineaVertical} />
-                    ) : null}
-                  </View>
-
-                  <View style={styles.historialTexto}>
-                    <Text style={styles.historialEstado}>
-                      {estiloRegistro.texto}
-                    </Text>
-
-                    <Text style={styles.historialFecha}>
-                      {formatearFecha(
-                        registro.fechaCambio ||
-                          registro.fechaActualizacion,
-                        true
-                      )}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
+              <Text
+                style={styles.textoBotonRechazar}
+              >
+                Rechazar solicitud
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : null}
+
+        {estado === 'ACEPTADA' ? (
+          <TouchableOpacity
+            style={[
+              styles.botonAceptar,
+              procesando &&
+                styles.botonDeshabilitado,
+            ]}
+            onPress={confirmarIniciar}
+            disabled={procesando}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name="play-circle-outline"
+              size={21}
+              color="#FFFFFF"
+            />
+
+            <Text style={styles.textoBoton}>
+              Iniciar servicio
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {estado === 'EN_PROCESO' ? (
+          <TouchableOpacity
+            style={[
+              styles.botonCompletar,
+              procesando &&
+                styles.botonDeshabilitado,
+            ]}
+            onPress={confirmarCompletar}
+            disabled={procesando}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name="checkmark-done-outline"
+              size={21}
+              color="#FFFFFF"
+            />
+
+            <Text style={styles.textoBoton}>
+              Marcar como completado
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
+
+      <Modal
+        visible={modalRechazoVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!procesando) {
+            setModalRechazoVisible(false);
+          }
+        }}
+      >
+        <View style={styles.modalFondo}>
+          <View style={styles.modalContenido}>
+            <View style={styles.modalIcono}>
+              <Ionicons
+                name="close-circle-outline"
+                size={30}
+                color="#DC2626"
+              />
+            </View>
+
+            <Text style={styles.modalTitulo}>
+              Rechazar solicitud
+            </Text>
+
+            <Text style={styles.modalTexto}>
+              Indica al cliente el motivo por el que no puedes
+              aceptar esta solicitud.
+            </Text>
+
+            <TextInput
+              style={styles.campoMotivo}
+              value={motivoRechazo}
+              onChangeText={setMotivoRechazo}
+              placeholder="Escribe el motivo del rechazo"
+              placeholderTextColor="#94A3B8"
+              multiline
+              maxLength={500}
+              editable={!procesando}
+              textAlignVertical="top"
+            />
+
+            <Text style={styles.contador}>
+              {motivoRechazo.length}/500
+            </Text>
+
+            <View style={styles.modalBotones}>
+              <TouchableOpacity
+                style={styles.botonModalCancelar}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setModalRechazoVisible(false);
+                  setMotivoRechazo('');
+                }}
+                disabled={procesando}
+              >
+                <Text
+                  style={styles.textoModalCancelar}
+                >
+                  Volver
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.botonModalRechazar,
+                  procesando &&
+                    styles.botonDeshabilitado,
+                ]}
+                onPress={rechazar}
+                disabled={procesando}
+              >
+                {procesando ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#FFFFFF"
+                  />
+                ) : (
+                  <Text style={styles.textoBoton}>
+                    Rechazar
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -665,7 +837,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#12344D',
   },
   header: {
-    backgroundColor: '#12344D',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -677,8 +848,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 13,
     backgroundColor: '#1E506B',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 13,
   },
   headerTexto: {
@@ -694,56 +865,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  centro: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 34,
-    gap: 12,
-  },
-  textoCarga: {
-    color: '#64748B',
-    fontSize: 13,
-  },
-  iconoVacio: {
-    width: 84,
-    height: 84,
-    borderRadius: 26,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconoError: {
-    backgroundColor: '#FEE2E2',
-  },
-  tituloVacio: {
-    color: '#172B3A',
-    fontSize: 17,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  textoVacio: {
-    color: '#64748B',
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-  },
-  botonReintentar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: '#0D9488',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 13,
-    marginTop: 20,
-  },
-  textoBotonReintentar: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
   scroll: {
     flex: 1,
     backgroundColor: '#F8FAFC',
@@ -752,42 +873,55 @@ const styles = StyleSheet.create({
   },
   contenido: {
     padding: 20,
-    paddingBottom: 36,
+    paddingBottom: 40,
+  },
+  centro: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+  },
+  textoCarga: {
+    color: '#64748B',
+    fontSize: 13,
+    marginTop: 12,
   },
   tarjetaEstado: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 17,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 14,
   },
   iconoEstado: {
-    width: 54,
-    height: 54,
-    borderRadius: 17,
+    width: 50,
+    height: 50,
+    borderRadius: 15,
     backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    justifyContent: 'center',
+    marginRight: 13,
   },
-  estadoTexto: {
+  estadoContenido: {
     flex: 1,
-    gap: 7,
+    alignItems: 'flex-start',
   },
-  estadoServicio: {
+  tituloServicio: {
     color: '#172B3A',
     fontSize: 16,
     fontWeight: '800',
+    marginBottom: 7,
   },
   badge: {
-    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
+    borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 20,
     gap: 4,
   },
   badgeTexto: {
@@ -796,11 +930,11 @@ const styles = StyleSheet.create({
   },
   tarjeta: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 18,
-    marginTop: 14,
+    padding: 17,
+    marginBottom: 14,
   },
   tituloSeccion: {
     color: '#172B3A',
@@ -811,15 +945,15 @@ const styles = StyleSheet.create({
   filaDato: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 13,
+    paddingVertical: 9,
   },
   iconoDato: {
     width: 34,
     height: 34,
-    borderRadius: 11,
+    borderRadius: 10,
     backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 11,
   },
   datoTexto: {
@@ -832,130 +966,182 @@ const styles = StyleSheet.create({
   },
   datoValor: {
     color: '#172B3A',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    lineHeight: 19,
     marginTop: 2,
   },
   descripcion: {
-    marginTop: 3,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginTop: 7,
+    paddingTop: 13,
   },
   descripcionTexto: {
-    color: '#172B3A',
+    color: '#334155',
     fontSize: 13,
     lineHeight: 20,
-    marginTop: 5,
+    marginTop: 6,
   },
-  tarjetaAcciones: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 18,
-    marginTop: 14,
-  },
-  inputMotivo: {
-    minHeight: 74,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    color: '#172B3A',
-    fontSize: 14,
-    textAlignVertical: 'top',
-    marginBottom: 13,
-  },
-  accionesFila: {
+  acciones: {
     gap: 10,
   },
-  botonAccion: {
-    minHeight: 52,
-    borderRadius: 13,
+  botonAceptar: {
+    minHeight: 51,
+    borderRadius: 14,
+    backgroundColor: '#0D9488',
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  botonCompletar: {
+    minHeight: 51,
+    borderRadius: 14,
+    backgroundColor: '#15803D',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
-  botonAccionAncho: {
-    width: '100%',
+  botonRechazar: {
+    minHeight: 51,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  botonChat: {
+    minHeight: 51,
+    borderRadius: 14,
+    backgroundColor: '#12344D',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 14,
   },
   botonPrimario: {
     backgroundColor: '#0D9488',
-  },
-  botonPeligro: {
-    backgroundColor: '#DC2626',
-  },
-  textoBotonAccion: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  tarjetaCerrada: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  textoCerrada: {
-    color: '#475569',
-    fontSize: 13,
-    lineHeight: 18,
-    flex: 1,
-  },
-  botonChat: {
-    minHeight: 54,
-    backgroundColor: '#0D9488',
-    borderRadius: 15,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 13,
     marginTop: 18,
-    gap: 8,
   },
-  textoBotonChat: {
+  textoBoton: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '800',
   },
-  lineaHistorial: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
+  textoBotonRechazar: {
+    color: '#DC2626',
+    fontSize: 13,
+    fontWeight: '800',
   },
-  marcaHistorial: {
+  botonDeshabilitado: {
+    opacity: 0.55,
+  },
+  iconoError: {
+    width: 84,
+    height: 84,
+    borderRadius: 26,
+    backgroundColor: '#FEE2E2',
     alignItems: 'center',
-    marginRight: 13,
-    width: 14,
+    justifyContent: 'center',
+    marginBottom: 18,
   },
-  puntoHistorial: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    marginTop: 4,
+  tituloError: {
+    color: '#172B3A',
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
   },
-  lineaVertical: {
+  textoError: {
+    color: '#64748B',
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 7,
+  },
+  modalFondo: {
     flex: 1,
-    width: 2,
-    backgroundColor: '#E2E8F0',
-    marginVertical: 3,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 22,
   },
-  historialTexto: {
-    flex: 1,
-    paddingBottom: 15,
+  modalContenido: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 20,
   },
-  historialEstado: {
+  modalIcono: {
+    width: 54,
+    height: 54,
+    borderRadius: 17,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  modalTitulo: {
+    color: '#172B3A',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  modalTexto: {
+    color: '#64748B',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+    marginBottom: 14,
+  },
+  campoMotivo: {
+    minHeight: 110,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 13,
+    backgroundColor: '#F8FAFC',
+    padding: 12,
     color: '#172B3A',
     fontSize: 13,
-    fontWeight: '800',
   },
-  historialFecha: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 2,
+  contador: {
+    color: '#94A3B8',
+    fontSize: 10,
+    textAlign: 'right',
+    marginTop: 5,
+  },
+  modalBotones: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  botonModalCancelar: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 13,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botonModalRechazar: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 13,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textoModalCancelar: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

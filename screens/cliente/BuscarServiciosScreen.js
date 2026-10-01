@@ -6,6 +6,7 @@ import React, {
 } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -17,12 +18,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { servicioService } from '../../services/servicioService';
+import { userService } from '../../services/userService';
 
 export default function BuscarServiciosScreen({
   navigation,
 }) {
   const [servicios, setServicios] = useState([]);
   const [categorias, setCategorias] = useState([]);
+  const [trabajadores, setTrabajadores] = useState({});
   const [texto, setTexto] = useState('');
   const [categoriaId, setCategoriaId] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -30,22 +33,10 @@ export default function BuscarServiciosScreen({
   const [error, setError] = useState('');
 
   const obtenerContenidoPagina = (data) => {
-    if (Array.isArray(data)) {
-      return data;
-    }
-
-    if (Array.isArray(data?.contenido)) {
-      return data.contenido;
-    }
-
-    if (Array.isArray(data?.content)) {
-      return data.content;
-    }
-
-    if (Array.isArray(data?.elementos)) {
-      return data.elementos;
-    }
-
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.contenido)) return data.contenido;
+    if (Array.isArray(data?.content)) return data.content;
+    if (Array.isArray(data?.elementos)) return data.elementos;
     return [];
   };
 
@@ -71,6 +62,70 @@ export default function BuscarServiciosScreen({
     }
   }, []);
 
+  const cargarTrabajadores = useCallback(
+    async (serviciosObtenidos) => {
+      const perfilesIds = [
+        ...new Set(
+          serviciosObtenidos
+            .map((servicio) =>
+              Number(servicio.perfilTrabajadorId)
+            )
+            .filter(
+              (id) =>
+                Number.isInteger(id) &&
+                id > 0
+            )
+        ),
+      ];
+
+      const resultado = {};
+
+      await Promise.all(
+        perfilesIds.map(async (perfilId) => {
+          try {
+            const perfil =
+              await servicioService.obtenerPerfilTrabajadorPorId(
+                perfilId
+              );
+
+            const trabajadorId = Number(
+              perfil?.trabajadorId
+            );
+
+            if (
+              !Number.isInteger(trabajadorId) ||
+              trabajadorId <= 0
+            ) {
+              return;
+            }
+
+            let usuario = null;
+
+            try {
+              usuario =
+                await userService.obtenerUsuarioPorId(
+                  trabajadorId
+                );
+            } catch {
+              usuario = null;
+            }
+
+            resultado[perfilId] = {
+              perfil,
+              usuario,
+              trabajadorId,
+            };
+          } catch {
+            resultado[perfilId] = null;
+          }
+        })
+      );
+
+      setTrabajadores(resultado);
+    },
+    []
+  );
+
   const cargarServicios = useCallback(
     async (mostrarCarga = true) => {
       if (mostrarCarga) {
@@ -88,18 +143,28 @@ export default function BuscarServiciosScreen({
           size: 50,
         });
 
-        setServicios(
-          obtenerContenidoPagina(data)
+        const serviciosObtenidos =
+          obtenerContenidoPagina(data);
+
+        setServicios(serviciosObtenidos);
+
+        await cargarTrabajadores(
+          serviciosObtenidos
         );
       } catch (err) {
         setServicios([]);
+        setTrabajadores({});
         setError(obtenerMensajeError(err));
       } finally {
         setCargando(false);
         setActualizando(false);
       }
     },
-    [texto, categoriaId]
+    [
+      texto,
+      categoriaId,
+      cargarTrabajadores,
+    ]
   );
 
   useEffect(() => {
@@ -142,7 +207,9 @@ export default function BuscarServiciosScreen({
   };
 
   const obtenerTarifa = (servicio) => {
-    const minima = Number(servicio.tarifaMinima);
+    const minima = Number(
+      servicio.tarifaMinima
+    );
 
     const maxima =
       servicio.tarifaMaxima !== null &&
@@ -166,8 +233,16 @@ export default function BuscarServiciosScreen({
     return 'Consultar tarifa';
   };
 
+  const obtenerTrabajador = (servicio) => {
+    return trabajadores[
+      Number(servicio.perfilTrabajadorId)
+    ];
+  };
+
   const hayFiltros = useMemo(
-    () => !!texto.trim() || categoriaId !== null,
+    () =>
+      !!texto.trim() ||
+      categoriaId !== null,
     [texto, categoriaId]
   );
 
@@ -258,7 +333,9 @@ export default function BuscarServiciosScreen({
         {categorias.length > 0 ? (
           <ScrollView
             horizontal
-            showsHorizontalScrollIndicator={false}
+            showsHorizontalScrollIndicator={
+              false
+            }
             contentContainerStyle={
               styles.categorias
             }
@@ -324,7 +401,9 @@ export default function BuscarServiciosScreen({
           </Text>
 
           {!cargando && !error ? (
-            <Text style={styles.resultadosCantidad}>
+            <Text
+              style={styles.resultadosCantidad}
+            >
               {servicios.length}
             </Text>
           ) : null}
@@ -360,7 +439,11 @@ export default function BuscarServiciosScreen({
                 cargarServicios()
               }
             >
-              <Text style={styles.botonReintentarTexto}>
+              <Text
+                style={
+                  styles.botonReintentarTexto
+                }
+              >
                 Intentar nuevamente
               </Text>
             </Pressable>
@@ -386,97 +469,223 @@ export default function BuscarServiciosScreen({
                 style={styles.botonSecundario}
                 onPress={limpiarFiltros}
               >
-                <Text style={styles.botonSecundarioTexto}>
+                <Text
+                  style={
+                    styles.botonSecundarioTexto
+                  }
+                >
                   Limpiar filtros
                 </Text>
               </Pressable>
             ) : null}
           </View>
         ) : (
-          servicios.map((servicio) => (
-            <Pressable
-              key={servicio.id}
-              style={styles.tarjeta}
-              onPress={() =>
-                navigation.navigate(
-                  'DetalleServicio',
-                  {
-                    servicioId: servicio.id,
+          servicios.map((servicio) => {
+            const trabajador =
+              obtenerTrabajador(servicio);
+
+            const nombreTrabajador =
+              trabajador?.usuario?.nombre ||
+              'Profesional';
+
+            const fotoTrabajador =
+              trabajador?.perfil?.fotoUrl;
+
+            return (
+              <Pressable
+                key={servicio.id}
+                style={styles.tarjeta}
+                onPress={() =>
+                  navigation.navigate(
+                    'DetalleServicio',
+                    {
+                      servicioId:
+                        servicio.id,
+                    }
+                  )
+                }
+              >
+                <View
+                  style={
+                    styles.tarjetaSuperior
                   }
-                )
-              }
-            >
-              <View style={styles.tarjetaSuperior}>
-                <View style={styles.iconoServicio}>
+                >
+                  <View
+                    style={
+                      styles.iconoServicio
+                    }
+                  >
+                    <Ionicons
+                      name="construct-outline"
+                      size={25}
+                      color="#0D9488"
+                    />
+                  </View>
+
+                  <View
+                    style={
+                      styles.tarjetaInformacion
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.servicioTitulo
+                      }
+                      numberOfLines={2}
+                    >
+                      {servicio.titulo}
+                    </Text>
+
+                    <View
+                      style={
+                        styles.categoriaFila
+                      }
+                    >
+                      <Ionicons
+                        name="pricetag-outline"
+                        size={14}
+                        color="#667085"
+                      />
+
+                      <Text
+                        style={
+                          styles.categoriaNombre
+                        }
+                      >
+                        {obtenerNombreCategoria(
+                          servicio.categoriaId
+                        )}
+                      </Text>
+                    </View>
+                  </View>
+
                   <Ionicons
-                    name="construct-outline"
-                    size={25}
-                    color="#0D9488"
+                    name="chevron-forward"
+                    size={22}
+                    color="#98A2B3"
                   />
                 </View>
 
-                <View style={styles.tarjetaInformacion}>
-                  <Text
-                    style={styles.servicioTitulo}
-                    numberOfLines={2}
-                  >
-                    {servicio.titulo}
-                  </Text>
-
-                  <View style={styles.categoriaFila}>
-                    <Ionicons
-                      name="pricetag-outline"
-                      size={14}
-                      color="#667085"
+                <View
+                  style={
+                    styles.trabajadorFila
+                  }
+                >
+                  {fotoTrabajador ? (
+                    <Image
+                      source={{
+                        uri: fotoTrabajador,
+                      }}
+                      style={
+                        styles.trabajadorFoto
+                      }
                     />
+                  ) : (
+                    <View
+                      style={
+                        styles.trabajadorFotoVacia
+                      }
+                    >
+                      <Ionicons
+                        name="person"
+                        size={17}
+                        color="#2563EB"
+                      />
+                    </View>
+                  )}
 
-                    <Text style={styles.categoriaNombre}>
-                      {obtenerNombreCategoria(
-                        servicio.categoriaId
+                  <View
+                    style={
+                      styles.trabajadorDatos
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.trabajadorEtiqueta
+                      }
+                    >
+                      Ofrecido por
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.trabajadorNombre
+                      }
+                      numberOfLines={1}
+                    >
+                      {nombreTrabajador}
+                    </Text>
+                  </View>
+
+                  {trabajador?.perfil
+                    ?.oficioPrincipal ? (
+                    <Text
+                      style={
+                        styles.trabajadorOficio
+                      }
+                      numberOfLines={1}
+                    >
+                      {
+                        trabajador.perfil
+                          .oficioPrincipal
+                      }
+                    </Text>
+                  ) : null}
+                </View>
+
+                <Text
+                  style={
+                    styles.servicioDescripcion
+                  }
+                  numberOfLines={3}
+                >
+                  {servicio.descripcion}
+                </Text>
+
+                <View
+                  style={
+                    styles.tarjetaInferior
+                  }
+                >
+                  <View>
+                    <Text
+                      style={
+                        styles.tarifaEtiqueta
+                      }
+                    >
+                      Tarifa
+                    </Text>
+
+                    <Text
+                      style={styles.tarifa}
+                    >
+                      {obtenerTarifa(
+                        servicio
                       )}
                     </Text>
                   </View>
+
+                  <View
+                    style={styles.verDetalle}
+                  >
+                    <Text
+                      style={
+                        styles.verDetalleTexto
+                      }
+                    >
+                      Ver detalle
+                    </Text>
+
+                    <Ionicons
+                      name="arrow-forward"
+                      size={17}
+                      color="#2563EB"
+                    />
+                  </View>
                 </View>
-
-                <Ionicons
-                  name="chevron-forward"
-                  size={22}
-                  color="#98A2B3"
-                />
-              </View>
-
-              <Text
-                style={styles.servicioDescripcion}
-                numberOfLines={3}
-              >
-                {servicio.descripcion}
-              </Text>
-
-              <View style={styles.tarjetaInferior}>
-                <View>
-                  <Text style={styles.tarifaEtiqueta}>
-                    Tarifa
-                  </Text>
-
-                  <Text style={styles.tarifa}>
-                    {obtenerTarifa(servicio)}
-                  </Text>
-                </View>
-
-                <View style={styles.verDetalle}>
-                  <Text style={styles.verDetalleTexto}>
-                    Ver detalle
-                  </Text>
-
-                  <Ionicons
-                    name="arrow-forward"
-                    size={17}
-                    color="#2563EB"
-                  />
-                </View>
-              </View>
-            </Pressable>
-          ))
+              </Pressable>
+            );
+          })
         )}
       </ScrollView>
     </SafeAreaView>
@@ -699,31 +908,74 @@ const styles = StyleSheet.create({
   },
   categoriaNombre: {
     marginLeft: 5,
-    fontSize: 12,
+    fontSize: 13,
     color: '#667085',
+  },
+  trabajadorFila: {
+    marginTop: 15,
+    paddingTop: 13,
+    borderTopWidth: 1,
+    borderTopColor: '#F2F4F7',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trabajadorFoto: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
+  },
+  trabajadorFotoVacia: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trabajadorDatos: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  trabajadorEtiqueta: {
+    fontSize: 11,
+    color: '#98A2B3',
+  },
+  trabajadorNombre: {
+    marginTop: 2,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#344054',
+  },
+  trabajadorOficio: {
+    maxWidth: 120,
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#0D9488',
+    fontWeight: '600',
   },
   servicioDescripcion: {
     marginTop: 14,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 20,
     color: '#475467',
   },
   tarjetaInferior: {
-    marginTop: 16,
+    marginTop: 15,
     paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: '#EAECF0',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-end',
+    justifyContent: 'space-between',
   },
   tarifaEtiqueta: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#98A2B3',
   },
   tarifa: {
-    marginTop: 3,
-    fontSize: 15,
+    marginTop: 4,
+    fontSize: 16,
     fontWeight: '700',
     color: '#101828',
   },
@@ -732,8 +984,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   verDetalleTexto: {
-    marginRight: 5,
-    fontSize: 12,
+    marginRight: 6,
+    fontSize: 13,
     fontWeight: '700',
     color: '#2563EB',
   },
