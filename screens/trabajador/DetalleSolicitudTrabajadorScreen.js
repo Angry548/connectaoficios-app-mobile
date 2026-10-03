@@ -2,20 +2,20 @@ import React, {
   useCallback,
   useState,
 } from 'react';
+
 import {
   ActivityIndicator,
   Alert,
   Keyboard,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   View,
-  StatusBar,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { solicitudService } from '../../services/solicitudService';
@@ -24,38 +24,44 @@ import { userService } from '../../services/userService';
 const ESTADOS = {
   PENDIENTE: {
     texto: 'Pendiente',
-    color: '#B45309',
-    fondo: '#FEF3C7',
+    color: '#B54708',
+    fondo: '#FFFAEB',
+    borde: '#FEDF89',
     icono: 'time-outline',
   },
   ACEPTADA: {
     texto: 'Aceptada',
-    color: '#0F766E',
-    fondo: '#E6F4F1',
+    color: '#027A48',
+    fondo: '#ECFDF3',
+    borde: '#ABEFC6',
     icono: 'checkmark-circle-outline',
   },
   RECHAZADA: {
     texto: 'Rechazada',
-    color: '#B91C1C',
-    fondo: '#FEE2E2',
+    color: '#B42318',
+    fondo: '#FEF3F2',
+    borde: '#FECDCA',
     icono: 'close-circle-outline',
   },
   EN_PROCESO: {
     texto: 'En proceso',
-    color: '#1D4ED8',
-    fondo: '#DBEAFE',
+    color: '#175CD3',
+    fondo: '#EFF8FF',
+    borde: '#B2DDFF',
     icono: 'sync-outline',
   },
   COMPLETADA: {
     texto: 'Completada',
-    color: '#15803D',
-    fondo: '#DCFCE7',
+    color: '#027A48',
+    fondo: '#ECFDF3',
+    borde: '#ABEFC6',
     icono: 'checkmark-done-outline',
   },
   CANCELADA: {
     texto: 'Cancelada',
-    color: '#64748B',
-    fondo: '#E2E8F0',
+    color: '#475467',
+    fondo: '#F2F4F7',
+    borde: '#D0D5DD',
     icono: 'ban-outline',
   },
 };
@@ -64,8 +70,9 @@ const obtenerEstiloEstado = (estado) => {
   return (
     ESTADOS[String(estado || '').toUpperCase()] || {
       texto: 'Sin estado',
-      color: '#475569',
-      fondo: '#E2E8F0',
+      color: '#475467',
+      fondo: '#F2F4F7',
+      borde: '#D0D5DD',
       icono: 'help-circle-outline',
     }
   );
@@ -76,7 +83,10 @@ const formatearFecha = (valor, conHora = false) => {
     return 'Sin definir';
   }
 
-  if (!conHora && /^\d{4}-\d{2}-\d{2}$/.test(String(valor))) {
+  if (
+    !conHora &&
+    /^\d{4}-\d{2}-\d{2}$/.test(String(valor))
+  ) {
     const [anio, mes, dia] = String(valor).split('-');
     return `${dia}/${mes}/${anio}`;
   }
@@ -117,8 +127,8 @@ const FilaDato = ({
     <View style={styles.iconoDato}>
       <Ionicons
         name={icono}
-        size={17}
-        color="#0D9488"
+        size={18}
+        color="#2563EB"
       />
     </View>
 
@@ -226,7 +236,6 @@ export default function DetalleSolicitudTrabajadorScreen({
 
     try {
       await accion();
-
       await cargarDetalle();
 
       Alert.alert(
@@ -366,18 +375,12 @@ export default function DetalleSolicitudTrabajadorScreen({
   if (cargando) {
     return (
       <SafeAreaView
-        style={styles.container}
-        edges={['top']}
+        style={styles.contenedor}
       >
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="#12344D"
-        />
-
         <View style={styles.centro}>
           <ActivityIndicator
             size="large"
-            color="#0D9488"
+            color="#2563EB"
           />
 
           <Text style={styles.textoCarga}>
@@ -391,20 +394,37 @@ export default function DetalleSolicitudTrabajadorScreen({
   if (error || !solicitud) {
     return (
       <SafeAreaView
-        style={styles.container}
-        edges={['top']}
+        style={styles.contenedor}
       >
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="#12344D"
-        />
+        <View style={styles.encabezado}>
+          <Pressable
+            style={styles.botonVolver}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={23}
+              color="#101828"
+            />
+          </Pressable>
+
+          <View style={styles.encabezadoTexto}>
+            <Text style={styles.titulo}>
+              Detalle de solicitud
+            </Text>
+
+            <Text style={styles.subtitulo}>
+              Información del servicio solicitado
+            </Text>
+          </View>
+        </View>
 
         <View style={styles.centro}>
           <View style={styles.iconoError}>
             <Ionicons
               name="cloud-offline-outline"
-              size={38}
-              color="#DC2626"
+              size={42}
+              color="#B42318"
             />
           </View>
 
@@ -416,21 +436,25 @@ export default function DetalleSolicitudTrabajadorScreen({
             {error}
           </Text>
 
-          <TouchableOpacity
-            style={styles.botonPrimario}
-            onPress={() => navigation.goBack()}
+          <Pressable
+            style={styles.botonReintentar}
+            onPress={cargarDetalle}
           >
-            <Text style={styles.textoBoton}>
-              Volver
+            <Text
+              style={styles.botonReintentarTexto}
+            >
+              Intentar nuevamente
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
   }
 
   const estado =
-    String(solicitud.estado || '').toUpperCase();
+    String(
+      solicitud.estado || ''
+    ).toUpperCase();
 
   const estiloEstado =
     obtenerEstiloEstado(estado);
@@ -442,33 +466,26 @@ export default function DetalleSolicitudTrabajadorScreen({
 
   return (
     <SafeAreaView
-      style={styles.container}
-      edges={['top']}
+      style={styles.contenedor}
     >
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#12344D"
-      />
-
-      <View style={styles.header}>
-        <TouchableOpacity
+      <View style={styles.encabezado}>
+        <Pressable
           style={styles.botonVolver}
           onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
         >
           <Ionicons
-            name="arrow-back-outline"
-            size={24}
-            color="#FFFFFF"
+            name="arrow-back"
+            size={23}
+            color="#101828"
           />
-        </TouchableOpacity>
+        </Pressable>
 
-        <View style={styles.headerTexto}>
-          <Text style={styles.tituloHeader}>
+        <View style={styles.encabezadoTexto}>
+          <Text style={styles.titulo}>
             Detalle de solicitud
           </Text>
 
-          <Text style={styles.subtituloHeader}>
+          <Text style={styles.subtitulo}>
             Solicitud #{solicitud.idSolicitud}
           </Text>
         </View>
@@ -478,56 +495,71 @@ export default function DetalleSolicitudTrabajadorScreen({
         style={styles.scroll}
         contentContainerStyle={styles.contenido}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.tarjetaEstado}>
-          <View style={styles.iconoEstado}>
-            <Ionicons
-              name="briefcase-outline"
-              size={25}
-              color="#0D9488"
-            />
-          </View>
-
-          <View style={styles.estadoContenido}>
-            <Text style={styles.tituloServicio}>
-              {solicitud.servicioTitulo ||
-                'Servicio'}
-            </Text>
-
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor:
-                    estiloEstado.fondo,
-                },
-              ]}
-            >
+        <View style={styles.tarjeta}>
+          <View style={styles.tarjetaEncabezado}>
+            <View style={styles.iconoServicio}>
               <Ionicons
-                name={estiloEstado.icono}
-                size={13}
-                color={estiloEstado.color}
+                name="briefcase-outline"
+                size={25}
+                color="#2563EB"
               />
+            </View>
 
-              <Text
+            <View style={styles.informacionPrincipal}>
+              <Text style={styles.tituloServicio}>
+                {solicitud.servicioTitulo ||
+                  'Servicio'}
+              </Text>
+
+              <View
                 style={[
-                  styles.badgeTexto,
+                  styles.badgeEstado,
                   {
-                    color:
-                      estiloEstado.color,
+                    backgroundColor:
+                      estiloEstado.fondo,
+                    borderColor:
+                      estiloEstado.borde,
                   },
                 ]}
               >
-                {estiloEstado.texto}
-              </Text>
+                <Ionicons
+                  name={estiloEstado.icono}
+                  size={14}
+                  color={estiloEstado.color}
+                />
+
+                <Text
+                  style={[
+                    styles.badgeEstadoTexto,
+                    {
+                      color:
+                        estiloEstado.color,
+                    },
+                  ]}
+                >
+                  {estiloEstado.texto}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
 
         <View style={styles.tarjeta}>
-          <Text style={styles.tituloSeccion}>
-            Información del cliente
-          </Text>
+          <View style={styles.tituloSeccionContenedor}>
+            <Ionicons
+              name="person-outline"
+              size={19}
+              color="#2563EB"
+            />
+
+            <Text style={styles.tituloSeccion}>
+              Información del cliente
+            </Text>
+          </View>
+
+          <View style={styles.separador} />
 
           <FilaDato
             icono="person-outline"
@@ -548,9 +580,19 @@ export default function DetalleSolicitudTrabajadorScreen({
         </View>
 
         <View style={styles.tarjeta}>
-          <Text style={styles.tituloSeccion}>
-            Información del servicio
-          </Text>
+          <View style={styles.tituloSeccionContenedor}>
+            <Ionicons
+              name="construct-outline"
+              size={19}
+              color="#2563EB"
+            />
+
+            <Text style={styles.tituloSeccion}>
+              Información del servicio
+            </Text>
+          </View>
+
+          <View style={styles.separador} />
 
           <FilaDato
             icono="calendar-outline"
@@ -571,7 +613,9 @@ export default function DetalleSolicitudTrabajadorScreen({
           <FilaDato
             icono="location-outline"
             etiqueta="Dirección"
-            valor={solicitud.direccionServicio}
+            valor={
+              solicitud.direccionServicio
+            }
           />
 
           <View style={styles.descripcion}>
@@ -579,7 +623,9 @@ export default function DetalleSolicitudTrabajadorScreen({
               Descripción del trabajo
             </Text>
 
-            <Text style={styles.descripcionTexto}>
+            <Text
+              style={styles.descripcionTexto}
+            >
               {solicitud.descripcionTrabajo ||
                 'Sin descripción registrada'}
             </Text>
@@ -587,9 +633,19 @@ export default function DetalleSolicitudTrabajadorScreen({
         </View>
 
         <View style={styles.tarjeta}>
-          <Text style={styles.tituloSeccion}>
-            Seguimiento
-          </Text>
+          <View style={styles.tituloSeccionContenedor}>
+            <Ionicons
+              name="git-branch-outline"
+              size={19}
+              color="#2563EB"
+            />
+
+            <Text style={styles.tituloSeccion}>
+              Seguimiento
+            </Text>
+          </View>
+
+          <View style={styles.separador} />
 
           <FilaDato
             icono="time-outline"
@@ -610,64 +666,105 @@ export default function DetalleSolicitudTrabajadorScreen({
           />
 
           {solicitud.motivoRechazo ? (
-            <FilaDato
-              icono="close-circle-outline"
-              etiqueta="Motivo del rechazo"
-              valor={solicitud.motivoRechazo}
-            />
+            <View style={styles.avisoRechazo}>
+              <Ionicons
+                name="close-circle-outline"
+                size={20}
+                color="#B42318"
+              />
+
+              <View style={styles.avisoContenido}>
+                <Text
+                  style={styles.avisoRechazoTitulo}
+                >
+                  Motivo del rechazo
+                </Text>
+
+                <Text
+                  style={styles.avisoRechazoTexto}
+                >
+                  {solicitud.motivoRechazo}
+                </Text>
+              </View>
+            </View>
           ) : null}
 
           {solicitud.motivoCancelacion ? (
-            <FilaDato
-              icono="information-circle-outline"
-              etiqueta="Motivo de cancelación"
-              valor={solicitud.motivoCancelacion}
-            />
+            <View style={styles.avisoCancelacion}>
+              <Ionicons
+                name="information-circle-outline"
+                size={20}
+                color="#475467"
+              />
+
+              <View style={styles.avisoContenido}>
+                <Text
+                  style={styles.avisoCancelacionTitulo}
+                >
+                  Motivo de cancelación
+                </Text>
+
+                <Text
+                  style={styles.avisoCancelacionTexto}
+                >
+                  {solicitud.motivoCancelacion}
+                </Text>
+              </View>
+            </View>
           ) : null}
         </View>
 
         {chatDisponible ? (
-          <TouchableOpacity
+          <Pressable
             style={styles.botonChat}
             onPress={abrirChat}
-            activeOpacity={0.85}
           >
             <Ionicons
               name="chatbubble-ellipses-outline"
               size={20}
-              color="#FFFFFF"
+              color="#2563EB"
             />
 
-            <Text style={styles.textoBoton}>
+            <Text style={styles.botonChatTexto}>
               Conversar con el cliente
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         ) : null}
 
         {estado === 'PENDIENTE' ? (
-          <View style={styles.acciones}>
-            <TouchableOpacity
+          <View style={styles.accionesVerticales}>
+            <Pressable
               style={[
-                styles.botonAceptar,
+                styles.botonPrincipal,
                 procesando &&
                   styles.botonDeshabilitado,
               ]}
               onPress={confirmarAceptar}
               disabled={procesando}
-              activeOpacity={0.85}
             >
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={21}
-                color="#FFFFFF"
-              />
+              {procesando ? (
+                <ActivityIndicator
+                  size="small"
+                  color="#FFFFFF"
+                />
+              ) : (
+                <>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={21}
+                    color="#FFFFFF"
+                  />
 
-              <Text style={styles.textoBoton}>
-                Aceptar solicitud
-              </Text>
-            </TouchableOpacity>
+                  <Text
+                    style={styles.textoBotonPrincipal}
+                  >
+                    Aceptar solicitud
+                  </Text>
+                </>
+              )}
+            </Pressable>
 
-            <TouchableOpacity
+            <Pressable
               style={[
                 styles.botonRechazar,
                 procesando &&
@@ -677,12 +774,11 @@ export default function DetalleSolicitudTrabajadorScreen({
                 setModalRechazoVisible(true)
               }
               disabled={procesando}
-              activeOpacity={0.85}
             >
               <Ionicons
                 name="close-circle-outline"
                 size={21}
-                color="#DC2626"
+                color="#B42318"
               />
 
               <Text
@@ -690,35 +786,45 @@ export default function DetalleSolicitudTrabajadorScreen({
               >
                 Rechazar solicitud
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         ) : null}
 
         {estado === 'ACEPTADA' ? (
-          <TouchableOpacity
+          <Pressable
             style={[
-              styles.botonAceptar,
+              styles.botonPrincipal,
               procesando &&
                 styles.botonDeshabilitado,
             ]}
             onPress={confirmarIniciar}
             disabled={procesando}
-            activeOpacity={0.85}
           >
-            <Ionicons
-              name="play-circle-outline"
-              size={21}
-              color="#FFFFFF"
-            />
+            {procesando ? (
+              <ActivityIndicator
+                size="small"
+                color="#FFFFFF"
+              />
+            ) : (
+              <>
+                <Ionicons
+                  name="play-circle-outline"
+                  size={21}
+                  color="#FFFFFF"
+                />
 
-            <Text style={styles.textoBoton}>
-              Iniciar servicio
-            </Text>
-          </TouchableOpacity>
+                <Text
+                  style={styles.textoBotonPrincipal}
+                >
+                  Iniciar servicio
+                </Text>
+              </>
+            )}
+          </Pressable>
         ) : null}
 
         {estado === 'EN_PROCESO' ? (
-          <TouchableOpacity
+          <Pressable
             style={[
               styles.botonCompletar,
               procesando &&
@@ -726,18 +832,110 @@ export default function DetalleSolicitudTrabajadorScreen({
             ]}
             onPress={confirmarCompletar}
             disabled={procesando}
-            activeOpacity={0.85}
           >
-            <Ionicons
-              name="checkmark-done-outline"
-              size={21}
-              color="#FFFFFF"
-            />
+            {procesando ? (
+              <ActivityIndicator
+                size="small"
+                color="#FFFFFF"
+              />
+            ) : (
+              <>
+                <Ionicons
+                  name="checkmark-done-outline"
+                  size={21}
+                  color="#FFFFFF"
+                />
 
-            <Text style={styles.textoBoton}>
-              Marcar como completado
-            </Text>
-          </TouchableOpacity>
+                <Text
+                  style={styles.textoBotonPrincipal}
+                >
+                  Marcar como completado
+                </Text>
+              </>
+            )}
+          </Pressable>
+        ) : null}
+
+        {estado === 'COMPLETADA' ? (
+          <View style={styles.estadoFinal}>
+            <View style={styles.estadoFinalIcono}>
+              <Ionicons
+                name="checkmark-done"
+                size={25}
+                color="#027A48"
+              />
+            </View>
+
+            <View style={styles.estadoFinalContenido}>
+              <Text
+                style={styles.estadoFinalTitulo}
+              >
+                Servicio completado
+              </Text>
+
+              <Text
+                style={styles.estadoFinalTexto}
+              >
+                El trabajo fue marcado como completado correctamente.
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {estado === 'RECHAZADA' ? (
+          <View style={styles.estadoFinalRechazado}>
+            <View
+              style={styles.estadoFinalIconoRechazado}
+            >
+              <Ionicons
+                name="close"
+                size={25}
+                color="#B42318"
+              />
+            </View>
+
+            <View style={styles.estadoFinalContenido}>
+              <Text
+                style={styles.estadoFinalTitulo}
+              >
+                Solicitud rechazada
+              </Text>
+
+              <Text
+                style={styles.estadoFinalTexto}
+              >
+                Esta solicitud ya no requiere ninguna acción.
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {estado === 'CANCELADA' ? (
+          <View style={styles.estadoFinalCancelado}>
+            <View
+              style={styles.estadoFinalIconoCancelado}
+            >
+              <Ionicons
+                name="ban-outline"
+                size={24}
+                color="#475467"
+              />
+            </View>
+
+            <View style={styles.estadoFinalContenido}>
+              <Text
+                style={styles.estadoFinalTitulo}
+              >
+                Solicitud cancelada
+              </Text>
+
+              <Text
+                style={styles.estadoFinalTexto}
+              >
+                Esta solicitud fue cancelada y ya no puede continuar.
+              </Text>
+            </View>
+          </View>
         ) : null}
       </ScrollView>
 
@@ -747,6 +945,7 @@ export default function DetalleSolicitudTrabajadorScreen({
         animationType="fade"
         onRequestClose={() => {
           if (!procesando) {
+            Keyboard.dismiss();
             setModalRechazoVisible(false);
           }
         }}
@@ -757,7 +956,7 @@ export default function DetalleSolicitudTrabajadorScreen({
               <Ionicons
                 name="close-circle-outline"
                 size={30}
-                color="#DC2626"
+                color="#B42318"
               />
             </View>
 
@@ -766,8 +965,11 @@ export default function DetalleSolicitudTrabajadorScreen({
             </Text>
 
             <Text style={styles.modalTexto}>
-              Indica al cliente el motivo por el que no puedes
-              aceptar esta solicitud.
+              Indica al cliente el motivo por el que no puedes aceptar esta solicitud.
+            </Text>
+
+            <Text style={styles.campoEtiqueta}>
+              Motivo del rechazo
             </Text>
 
             <TextInput
@@ -775,7 +977,7 @@ export default function DetalleSolicitudTrabajadorScreen({
               value={motivoRechazo}
               onChangeText={setMotivoRechazo}
               placeholder="Escribe el motivo del rechazo"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor="#98A2B3"
               multiline
               maxLength={500}
               editable={!procesando}
@@ -787,7 +989,7 @@ export default function DetalleSolicitudTrabajadorScreen({
             </Text>
 
             <View style={styles.modalBotones}>
-              <TouchableOpacity
+              <Pressable
                 style={styles.botonModalCancelar}
                 onPress={() => {
                   Keyboard.dismiss();
@@ -801,9 +1003,9 @@ export default function DetalleSolicitudTrabajadorScreen({
                 >
                   Volver
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
 
-              <TouchableOpacity
+              <Pressable
                 style={[
                   styles.botonModalRechazar,
                   procesando &&
@@ -818,11 +1020,13 @@ export default function DetalleSolicitudTrabajadorScreen({
                     color="#FFFFFF"
                   />
                 ) : (
-                  <Text style={styles.textoBoton}>
+                  <Text
+                    style={styles.textoModalRechazar}
+                  >
                     Rechazar
                   </Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -832,316 +1036,523 @@ export default function DetalleSolicitudTrabajadorScreen({
 }
 
 const styles = StyleSheet.create({
-  container: {
+  contenedor: {
     flex: 1,
-    backgroundColor: '#12344D',
+    backgroundColor: '#F8FAFC',
   },
-  header: {
+
+  encabezado: {
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAECF0',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
   },
+
   botonVolver: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: '#1E506B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 13,
-  },
-  headerTexto: {
-    flex: 1,
-  },
-  tituloHeader: {
-    color: '#FFFFFF',
-    fontSize: 21,
-    fontWeight: '800',
-  },
-  subtituloHeader: {
-    color: '#D6E4EC',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  scroll: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-  },
-  contenido: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  centro: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 30,
-  },
-  textoCarga: {
-    color: '#64748B',
-    fontSize: 13,
-    marginTop: 12,
-  },
-  tarjetaEstado: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  iconoEstado: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: '#E6F4F1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 13,
-  },
-  estadoContenido: {
-    flex: 1,
-    alignItems: 'flex-start',
-  },
-  tituloServicio: {
-    color: '#172B3A',
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 7,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    gap: 4,
-  },
-  badgeTexto: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  tarjeta: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 17,
-    marginBottom: 14,
-  },
-  tituloSeccion: {
-    color: '#172B3A',
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 13,
-  },
-  filaDato: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 9,
-  },
-  iconoDato: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#E6F4F1',
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 11,
   },
+
+  encabezadoTexto: {
+    flex: 1,
+  },
+
+  titulo: {
+    fontSize: 23,
+    fontWeight: '700',
+    color: '#101828',
+  },
+
+  subtitulo: {
+    marginTop: 3,
+    fontSize: 12,
+    color: '#667085',
+  },
+
+  scroll: {
+    flex: 1,
+  },
+
+  contenido: {
+    padding: 18,
+    paddingBottom: 40,
+    flexGrow: 1,
+  },
+
+  centro: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+
+  textoCarga: {
+    marginTop: 12,
+    color: '#667085',
+  },
+
+  tarjeta: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 17,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+  },
+
+  tarjetaEncabezado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  iconoServicio: {
+    width: 47,
+    height: 47,
+    borderRadius: 13,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  informacionPrincipal: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+
+  tituloServicio: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#101828',
+  },
+
+  badgeEstado: {
+    marginTop: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+
+  badgeEstadoTexto: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  tituloSeccionContenedor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  tituloSeccion: {
+    marginLeft: 7,
+    color: '#101828',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  separador: {
+    height: 1,
+    backgroundColor: '#EAECF0',
+    marginVertical: 15,
+  },
+
+  filaDato: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 7,
+  },
+
+  iconoDato: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+
   datoTexto: {
     flex: 1,
   },
+
   datoEtiqueta: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '700',
+    color: '#98A2B3',
+    fontSize: 12,
+    fontWeight: '600',
   },
+
   datoValor: {
-    color: '#172B3A',
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 2,
+    color: '#344054',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 3,
   },
+
   descripcion: {
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    marginTop: 7,
-    paddingTop: 13,
+    borderTopColor: '#F2F4F7',
+    marginTop: 8,
+    paddingTop: 14,
   },
+
   descripcionTexto: {
-    color: '#334155',
-    fontSize: 13,
-    lineHeight: 20,
+    color: '#475467',
+    fontSize: 14,
+    lineHeight: 21,
     marginTop: 6,
   },
-  acciones: {
+
+  accionesVerticales: {
     gap: 10,
   },
-  botonAceptar: {
-    minHeight: 51,
-    borderRadius: 14,
-    backgroundColor: '#0D9488',
+
+  botonPrincipal: {
+    minHeight: 50,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 10,
+    gap: 7,
   },
+
   botonCompletar: {
-    minHeight: 51,
-    borderRadius: 14,
-    backgroundColor: '#15803D',
+    minHeight: 50,
+    borderRadius: 12,
+    backgroundColor: '#039855',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 7,
   },
+
+  textoBotonPrincipal: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
   botonRechazar: {
-    minHeight: 51,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    minHeight: 50,
+    borderRadius: 12,
+    backgroundColor: '#FEF3F2',
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: '#FECDCA',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 7,
   },
+
+  textoBotonRechazar: {
+    color: '#B42318',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
   botonChat: {
-    minHeight: 51,
-    borderRadius: 14,
-    backgroundColor: '#12344D',
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 7,
     marginBottom: 14,
   },
-  botonPrimario: {
-    backgroundColor: '#0D9488',
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    borderRadius: 13,
-    marginTop: 18,
+
+  botonChatTexto: {
+    color: '#2563EB',
+    fontSize: 14,
+    fontWeight: '700',
   },
-  textoBoton: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  textoBotonRechazar: {
-    color: '#DC2626',
-    fontSize: 13,
-    fontWeight: '800',
-  },
+
   botonDeshabilitado: {
     opacity: 0.55,
   },
+
   iconoError: {
-    width: 84,
-    height: 84,
-    borderRadius: 26,
-    backgroundColor: '#FEE2E2',
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: '#FEF3F2',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
   },
+
   tituloError: {
-    color: '#172B3A',
-    fontSize: 18,
-    fontWeight: '800',
+    marginTop: 18,
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#101828',
     textAlign: 'center',
   },
+
   textoError: {
-    color: '#64748B',
-    fontSize: 13,
+    marginTop: 8,
+    color: '#667085',
     lineHeight: 20,
     textAlign: 'center',
-    marginTop: 7,
   },
-  modalFondo: {
+
+  botonReintentar: {
+    marginTop: 18,
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    paddingHorizontal: 17,
+    paddingVertical: 11,
+  },
+
+  botonReintentarTexto: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
+  avisoRechazo: {
+    marginTop: 13,
+    padding: 13,
+    borderRadius: 12,
+    backgroundColor: '#FEF3F2',
+    borderWidth: 1,
+    borderColor: '#FECDCA',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+
+  avisoCancelacion: {
+    marginTop: 13,
+    padding: 13,
+    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+
+  avisoContenido: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    marginLeft: 9,
+  },
+
+  avisoRechazoTitulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B42318',
+  },
+
+  avisoRechazoTexto: {
+    marginTop: 3,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#912018',
+  },
+
+  avisoCancelacionTitulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#344054',
+  },
+
+  avisoCancelacionTexto: {
+    marginTop: 3,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#475467',
+  },
+
+  estadoFinal: {
+    backgroundColor: '#ECFDF3',
+    borderWidth: 1,
+    borderColor: '#ABEFC6',
+    borderRadius: 14,
+    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  estadoFinalRechazado: {
+    backgroundColor: '#FEF3F2',
+    borderWidth: 1,
+    borderColor: '#FECDCA',
+    borderRadius: 14,
+    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  estadoFinalCancelado: {
+    backgroundColor: '#F2F4F7',
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    borderRadius: 14,
+    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  estadoFinalIcono: {
+    width: 43,
+    height: 43,
+    borderRadius: 12,
+    backgroundColor: '#D1FADF',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 22,
   },
-  modalContenido: {
-    width: '100%',
-    maxWidth: 440,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 20,
-  },
-  modalIcono: {
-    width: 54,
-    height: 54,
-    borderRadius: 17,
-    backgroundColor: '#FEE2E2',
+
+  estadoFinalIconoRechazado: {
+    width: 43,
+    height: 43,
+    borderRadius: 12,
+    backgroundColor: '#FEE4E2',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
   },
-  modalTitulo: {
-    color: '#172B3A',
-    fontSize: 18,
-    fontWeight: '800',
+
+  estadoFinalIconoCancelado: {
+    width: 43,
+    height: 43,
+    borderRadius: 12,
+    backgroundColor: '#EAECF0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  modalTexto: {
-    color: '#64748B',
+
+  estadoFinalContenido: {
+    flex: 1,
+    marginLeft: 12,
+  },
+
+  estadoFinalTitulo: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#101828',
+  },
+
+  estadoFinalTexto: {
+    marginTop: 3,
+    color: '#667085',
     fontSize: 12,
     lineHeight: 18,
+  },
+
+  modalFondo: {
+    flex: 1,
+    backgroundColor: 'rgba(16, 24, 40, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+
+  modalContenido: {
+    width: '100%',
+    maxWidth: 430,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+  },
+
+  modalIcono: {
+    width: 52,
+    height: 52,
+    borderRadius: 15,
+    backgroundColor: '#FEF3F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  modalTitulo: {
+    marginTop: 15,
+    color: '#101828',
+    fontSize: 19,
+    fontWeight: '700',
+  },
+
+  modalTexto: {
     marginTop: 6,
-    marginBottom: 14,
-  },
-  campoMotivo: {
-    minHeight: 110,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 13,
-    backgroundColor: '#F8FAFC',
-    padding: 12,
-    color: '#172B3A',
+    color: '#667085',
     fontSize: 13,
+    lineHeight: 20,
   },
+
+  campoEtiqueta: {
+    marginTop: 18,
+    marginBottom: 7,
+    color: '#344054',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  campoMotivo: {
+    minHeight: 115,
+    maxHeight: 160,
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    borderRadius: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    color: '#101828',
+    fontSize: 14,
+    backgroundColor: '#FFFFFF',
+  },
+
   contador: {
-    color: '#94A3B8',
-    fontSize: 10,
+    marginTop: 6,
     textAlign: 'right',
-    marginTop: 5,
+    color: '#98A2B3',
+    fontSize: 11,
   },
+
   modalBotones: {
+    marginTop: 19,
     flexDirection: 'row',
     gap: 10,
-    marginTop: 16,
   },
+
   botonModalCancelar: {
     flex: 1,
-    minHeight: 48,
-    borderRadius: 13,
-    backgroundColor: '#F1F5F9',
+    minHeight: 47,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  textoModalCancelar: {
+    color: '#344054',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
   botonModalRechazar: {
     flex: 1,
-    minHeight: 48,
-    borderRadius: 13,
-    backgroundColor: '#DC2626',
+    minHeight: 47,
+    borderRadius: 11,
+    backgroundColor: '#D92D20',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  textoModalCancelar: {
-    color: '#475569',
+
+  textoModalRechazar: {
+    color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });

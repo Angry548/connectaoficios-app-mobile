@@ -20,6 +20,7 @@ import NotificacionesTrabajadorScreen from '../screens/trabajador/Notificaciones
 
 import PromocionesScreen from '../screens/trabajador/PromocionesScreen';
 import DetallePromocionScreen from '../screens/trabajador/DetallePromocionScreen';
+import PagoPromocionScreen from '../screens/trabajador/PagoPromocionScreen';
 import HistorialPagosScreen from '../screens/trabajador/HistorialPagosScreen';
 import ReputacionScreen from '../screens/trabajador/ReputacionScreen';
 
@@ -115,6 +116,11 @@ export default function TrabajadorNavigator() {
       <Stack.Screen
         name="DetallePromocion"
         component={DetallePromocionScreen}
+      />
+
+      <Stack.Screen
+        name="PagoPromocion"
+        component={PagoPromocionScreen}
       />
 
       <Stack.Screen

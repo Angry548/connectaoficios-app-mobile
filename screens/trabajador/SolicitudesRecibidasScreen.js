@@ -3,6 +3,7 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+
 import {
   View,
   Text,
@@ -14,6 +15,7 @@ import {
   StatusBar,
   ScrollView,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { solicitudService } from '../../services/solicitudService';
@@ -210,7 +212,7 @@ export default function SolicitudesRecibidasScreen({
             <Ionicons
               name="briefcase-outline"
               size={21}
-              color="#0D9488"
+              color="#2563EB"
             />
           </View>
 
@@ -223,7 +225,7 @@ export default function SolicitudesRecibidasScreen({
               <Ionicons
                 name="person-outline"
                 size={13}
-                color="#64748B"
+                color="#667085"
               />
 
               <Text style={styles.nombreCliente}>
@@ -236,7 +238,7 @@ export default function SolicitudesRecibidasScreen({
           <Ionicons
             name="chevron-forward-outline"
             size={20}
-            color="#94A3B8"
+            color="#98A2B3"
           />
         </View>
 
@@ -253,7 +255,7 @@ export default function SolicitudesRecibidasScreen({
             <Ionicons
               name="calendar-outline"
               size={14}
-              color="#64748B"
+              color="#667085"
             />
 
             <Text style={styles.textoDato}>
@@ -296,8 +298,8 @@ export default function SolicitudesRecibidasScreen({
       edges={['top']}
     >
       <StatusBar
-        barStyle="light-content"
-        backgroundColor="#12344D"
+        barStyle="dark-content"
+        backgroundColor="#FFFFFF"
       />
 
       <View style={styles.header}>
@@ -307,9 +309,9 @@ export default function SolicitudesRecibidasScreen({
           activeOpacity={0.7}
         >
           <Ionicons
-            name="arrow-back-outline"
-            size={24}
-            color="#FFFFFF"
+            name="arrow-back"
+            size={23}
+            color="#101828"
           />
         </TouchableOpacity>
 
@@ -373,7 +375,7 @@ export default function SolicitudesRecibidasScreen({
           <View style={styles.centro}>
             <ActivityIndicator
               size="large"
-              color="#0D9488"
+              color="#2563EB"
             />
 
             <Text style={styles.textoCarga}>
@@ -391,7 +393,7 @@ export default function SolicitudesRecibidasScreen({
               <Ionicons
                 name="cloud-offline-outline"
                 size={38}
-                color="#DC2626"
+                color="#D92D20"
               />
             </View>
 
@@ -440,7 +442,7 @@ export default function SolicitudesRecibidasScreen({
                   <Ionicons
                     name="file-tray-outline"
                     size={38}
-                    color="#0D9488"
+                    color="#2563EB"
                   />
                 </View>
 
@@ -458,8 +460,8 @@ export default function SolicitudesRecibidasScreen({
               <RefreshControl
                 refreshing={actualizando}
                 onRefresh={refrescar}
-                colors={['#0D9488']}
-                tintColor="#0D9488"
+                colors={['#2563EB']}
+                tintColor="#2563EB"
               />
             }
           />
@@ -472,143 +474,168 @@ export default function SolicitudesRecibidasScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#12344D',
+    backgroundColor: '#F8FAFC',
   },
+
   header: {
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAECF0',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
   },
+
   botonVolver: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: '#1E506B',
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#F2F4F7',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 13,
+    marginRight: 11,
   },
+
   headerTexto: {
     flex: 1,
   },
+
   tituloHeader: {
-    color: '#FFFFFF',
-    fontSize: 21,
-    fontWeight: '800',
+    fontSize: 23,
+    fontWeight: '700',
+    color: '#101828',
   },
+
   subtituloHeader: {
-    color: '#D6E4EC',
+    marginTop: 3,
     fontSize: 12,
-    marginTop: 2,
+    color: '#667085',
   },
+
   contenedorLista: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    overflow: 'hidden',
   },
+
   filtrosContenedor: {
     paddingTop: 17,
   },
+
   filtros: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     gap: 8,
   },
+
   filtro: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#EAECF0',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
+
   filtroSeleccionado: {
-    backgroundColor: '#0D9488',
-    borderColor: '#0D9488',
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
   },
+
   textoFiltro: {
-    color: '#64748B',
+    color: '#667085',
     fontSize: 11,
     fontWeight: '700',
   },
+
   textoFiltroSeleccionado: {
     color: '#FFFFFF',
   },
+
   listaContenido: {
-    padding: 20,
+    padding: 18,
     paddingTop: 16,
-    paddingBottom: 36,
+    paddingBottom: 40,
   },
+
   listaVacia: {
     flexGrow: 1,
   },
+
   tarjeta: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 15,
-    marginBottom: 12,
+    borderColor: '#EAECF0',
+    padding: 17,
+    marginBottom: 14,
   },
+
   tarjetaEncabezado: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   iconoServicio: {
-    width: 44,
-    height: 44,
+    width: 47,
+    height: 47,
     borderRadius: 13,
-    backgroundColor: '#E6F4F1',
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
+
   datosPrincipales: {
     flex: 1,
     marginRight: 8,
   },
+
   tituloServicio: {
-    color: '#172B3A',
-    fontSize: 14,
-    fontWeight: '800',
+    color: '#101828',
+    fontSize: 17,
+    fontWeight: '700',
   },
+
   filaCliente: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
+    marginTop: 5,
   },
+
   nombreCliente: {
-    color: '#64748B',
-    fontSize: 11,
-  },
-  descripcion: {
-    color: '#64748B',
+    color: '#667085',
     fontSize: 12,
-    lineHeight: 18,
-    marginTop: 12,
   },
+
+  descripcion: {
+    color: '#475467',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 15,
+  },
+
   tarjetaPie: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 12,
-    marginTop: 12,
+    borderTopColor: '#EAECF0',
+    paddingTop: 15,
+    marginTop: 15,
   },
+
   datoPie: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
+
   textoDato: {
-    color: '#64748B',
+    color: '#667085',
     fontSize: 12,
   },
+
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -617,64 +644,75 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 4,
   },
+
   badgeTexto: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
   },
+
   centro: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    backgroundColor: '#F8FAFC',
   },
+
   textoCarga: {
-    color: '#64748B',
-    fontSize: 13,
+    marginTop: 12,
+    color: '#667085',
   },
+
   estadoVacio: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 34,
+    paddingHorizontal: 28,
+    paddingVertical: 50,
   },
+
   iconoVacio: {
-    width: 84,
-    height: 84,
-    borderRadius: 26,
-    backgroundColor: '#E6F4F1',
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
   },
+
   iconoError: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FEF3F2',
   },
+
   tituloVacio: {
-    color: '#172B3A',
-    fontSize: 18,
-    fontWeight: '800',
+    marginTop: 18,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#101828',
     textAlign: 'center',
   },
+
   textoVacio: {
-    color: '#64748B',
-    fontSize: 13,
+    marginTop: 8,
+    color: '#667085',
     lineHeight: 20,
     textAlign: 'center',
-    marginTop: 7,
   },
+
   botonReintentar: {
+    marginTop: 22,
+    minHeight: 48,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 7,
-    backgroundColor: '#0D9488',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 13,
-    marginTop: 18,
   },
+
   textoBoton: {
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });

@@ -20,7 +20,9 @@ const obtenerTrabajadorIdDesdeToken = async () => {
   const trabajadorId = Number(payload?.sub);
 
   if (!Number.isInteger(trabajadorId) || trabajadorId <= 0) {
-    throw new Error('No se pudo identificar al trabajador autenticado.');
+    throw new Error(
+      'No se pudo identificar al trabajador autenticado.'
+    );
   }
 
   return trabajadorId;
@@ -35,12 +37,21 @@ const obtenerContenidoPagina = (data) => {
 };
 
 const normalizarNumero = (valor) => {
-  if (valor === null || valor === undefined || valor === '') {
+  if (
+    valor === null ||
+    valor === undefined ||
+    valor === ''
+  ) {
     return null;
   }
 
-  const numero = Number(String(valor).replace(',', '.'));
-  return Number.isFinite(numero) ? numero : null;
+  const numero = Number(
+    String(valor).replace(',', '.')
+  );
+
+  return Number.isFinite(numero)
+    ? numero
+    : null;
 };
 
 const limpiarParametros = (params) =>
@@ -54,18 +65,23 @@ const limpiarParametros = (params) =>
   );
 
 export const servicioService = {
-  obtenerTrabajadorId: async () => obtenerTrabajadorIdDesdeToken(),
+  obtenerTrabajadorId: async () =>
+    obtenerTrabajadorIdDesdeToken(),
 
   obtenerMiPerfilTrabajador: async () => {
-    const trabajadorId = await obtenerTrabajadorIdDesdeToken();
+    const trabajadorId =
+      await obtenerTrabajadorIdDesdeToken();
+
     const response = await apiJava.get(
       `/api/perfiles-trabajador/trabajador/${trabajadorId}`
     );
+
     return response.data;
   },
 
   obtenerMiPerfilTrabajadorId: async () => {
-    const perfil = await servicioService.obtenerMiPerfilTrabajador();
+    const perfil =
+      await servicioService.obtenerMiPerfilTrabajador();
 
     if (!perfil?.id) {
       throw new Error(
@@ -77,33 +93,56 @@ export const servicioService = {
   },
 
   listarCategorias: async () => {
-    const response = await apiJava.get('/api/categorias');
-    return Array.isArray(response.data) ? response.data : [];
+    const response =
+      await apiJava.get('/api/categorias');
+
+    return Array.isArray(response.data)
+      ? response.data
+      : [];
   },
 
-  buscarCategorias: async (texto, limit = 10) => {
+  buscarCategorias: async (
+    texto,
+    limit = 10
+  ) => {
     const textoLimpio = texto?.trim();
 
-    if (!textoLimpio || textoLimpio.length < 2) {
+    if (
+      !textoLimpio ||
+      textoLimpio.length < 2
+    ) {
       return [];
     }
 
-    const response = await apiJava.get('/api/categorias/buscar', {
-      params: {
-        texto: textoLimpio,
-        limit: Math.min(Math.max(Number(limit) || 10, 1), 10),
-      },
-    });
+    const response = await apiJava.get(
+      '/api/categorias/buscar',
+      {
+        params: {
+          texto: textoLimpio,
+          limit: Math.min(
+            Math.max(Number(limit) || 10, 1),
+            10
+          ),
+        },
+      }
+    );
 
-    return Array.isArray(response.data) ? response.data : [];
+    return Array.isArray(response.data)
+      ? response.data
+      : [];
   },
 
   obtenerCategoriaPorId: async (id) => {
     if (!id) {
-      throw new Error('El identificador de la categoría es obligatorio.');
+      throw new Error(
+        'El identificador de la categoría es obligatorio.'
+      );
     }
 
-    const response = await apiJava.get(`/api/categorias/${id}`);
+    const response = await apiJava.get(
+      `/api/categorias/${id}`
+    );
+
     return response.data;
   },
 
@@ -132,12 +171,18 @@ export const servicioService = {
       size,
     });
 
-    const response = await apiJava.get('/api/servicios', { params });
+    const response = await apiJava.get(
+      '/api/servicios',
+      { params }
+    );
+
     return response.data;
   },
 
   listarContenido: async (filtros = {}) =>
-    obtenerContenidoPagina(await servicioService.listar(filtros)),
+    obtenerContenidoPagina(
+      await servicioService.listar(filtros)
+    ),
 
   listarPorTrabajador: async (
     perfilTrabajadorId,
@@ -145,12 +190,19 @@ export const servicioService = {
     size = 20
   ) => {
     if (!perfilTrabajadorId) {
-      throw new Error('El perfil del trabajador es obligatorio.');
+      throw new Error(
+        'El perfil del trabajador es obligatorio.'
+      );
     }
 
     const response = await apiJava.get(
       `/api/servicios/trabajador/${perfilTrabajadorId}`,
-      { params: { page, size } }
+      {
+        params: {
+          page,
+          size,
+        },
+      }
     );
 
     return response.data;
@@ -169,7 +221,10 @@ export const servicioService = {
       )
     ),
 
-  listarMisServicios: async (page = 0, size = 100) => {
+  listarMisServicios: async (
+    page = 0,
+    size = 100
+  ) => {
     const perfilTrabajadorId =
       await servicioService.obtenerMiPerfilTrabajadorId();
 
@@ -188,12 +243,19 @@ export const servicioService = {
     size = 20
   ) => {
     if (!categoriaId) {
-      throw new Error('La categoría es obligatoria.');
+      throw new Error(
+        'La categoría es obligatoria.'
+      );
     }
 
     const response = await apiJava.get(
       `/api/servicios/categoria/${categoriaId}`,
-      { params: { page, size } }
+      {
+        params: {
+          page,
+          size,
+        },
+      }
     );
 
     return response.data;
@@ -204,62 +266,89 @@ export const servicioService = {
     page = 0,
     size = 20
   ) => {
-    if (!zonaId) {
-      throw new Error('la zona de cobertura es obligatoria.');
+    const id = Number(zonaId);
+
+    if (
+      !Number.isInteger(id) ||
+      id <= 0
+    ) {
+      throw new Error(
+        'La zona de cobertura es obligatoria.'
+      );
     }
 
     const response = await apiJava.get(
-      `/api/servicios/zona/${zonaId}`,
-      { params: { page, size } }
+      `/api/servicios/zona/${id}`,
+      {
+        params: {
+          page,
+          size,
+        },
+      }
     );
 
     return response.data;
   },
 
-  buscar: async (texto, limit = 10) => {
+  buscar: async (
+    texto,
+    limit = 10
+  ) => {
     const textoLimpio = texto?.trim();
 
     if (!textoLimpio) {
       return [];
     }
 
-    const response = await apiJava.get('/api/servicios/buscar', {
-      params: {
-        texto: textoLimpio,
-        limit,
-      },
-    });
+    const response = await apiJava.get(
+      '/api/servicios/buscar',
+      {
+        params: {
+          texto: textoLimpio,
+          limit,
+        },
+      }
+    );
 
-    return Array.isArray(response.data) ? response.data : [];
+    return Array.isArray(response.data)
+      ? response.data
+      : [];
   },
 
-  buscarConFiltros: async (filtro = {}) => {
+  buscarConFiltros: async (
+    filtro = {}
+  ) => {
     const response = await apiJava.post(
       '/api/servicios/filtros',
       filtro
     );
 
-    return Array.isArray(response.data) ? response.data : [];
+    return Array.isArray(response.data)
+      ? response.data
+      : [];
   },
 
-  obtenerPerfilTrabajadorPorId: async (perfilTrabajadorId) => {
-  const perfilId = Number(perfilTrabajadorId);
+  obtenerPerfilTrabajadorPorId: async (
+    perfilTrabajadorId
+  ) => {
+    const perfilId =
+      Number(perfilTrabajadorId);
 
-  if (
-    !Number.isInteger(perfilId) ||
-    perfilId <= 0
-  ) {
-    throw new Error(
-      'El identificador del perfil del trabajador no es válido.'
+    if (
+      !Number.isInteger(perfilId) ||
+      perfilId <= 0
+    ) {
+      throw new Error(
+        'El identificador del perfil del trabajador no es válido.'
+      );
+    }
+
+    const response = await apiJava.get(
+      `/api/perfiles-trabajador/${perfilId}`
     );
-  }
 
-  const response = await apiJava.get(
-    `/api/perfiles-trabajador/${perfilId}`
-  );
-
-  return response.data;
-},
+    return response.data;
+  },
 
   obtenerPorId: async (id) => {
     if (!id) {
@@ -268,7 +357,10 @@ export const servicioService = {
       );
     }
 
-    const response = await apiJava.get(`/api/servicios/${id}`);
+    const response = await apiJava.get(
+      `/api/servicios/${id}`
+    );
+
     return response.data;
   },
 
@@ -288,14 +380,22 @@ export const servicioService = {
       categoriaId: Number(categoriaId),
       titulo: titulo?.trim(),
       descripcion: descripcion?.trim(),
-      tarifaMinima: normalizarNumero(tarifaMinima),
-      tarifaMaxima: normalizarNumero(tarifaMaxima),
-      zonasCoberturaIds: Array.isArray(zonasCoberturaIds)
+      tarifaMinima:
+        normalizarNumero(tarifaMinima),
+      tarifaMaxima:
+        normalizarNumero(tarifaMaxima),
+      zonasCoberturaIds: Array.isArray(
+        zonasCoberturaIds
+      )
         ? zonasCoberturaIds.map(Number)
         : [],
     };
 
-    const response = await apiJava.post('/api/servicios', datos);
+    const response = await apiJava.post(
+      '/api/servicios',
+      datos
+    );
+
     return response.data;
   },
 
@@ -323,32 +423,42 @@ export const servicioService = {
       categoriaId !== undefined &&
       categoriaId !== ''
     ) {
-      datos.categoriaId = Number(categoriaId);
+      datos.categoriaId =
+        Number(categoriaId);
     }
 
     if (titulo !== undefined) {
       datos.titulo =
-        titulo === null ? null : titulo.trim();
+        titulo === null
+          ? null
+          : titulo.trim();
     }
 
     if (descripcion !== undefined) {
       datos.descripcion =
-        descripcion === null ? null : descripcion.trim();
+        descripcion === null
+          ? null
+          : descripcion.trim();
     }
 
     if (tarifaMinima !== undefined) {
-      datos.tarifaMinima = normalizarNumero(tarifaMinima);
+      datos.tarifaMinima =
+        normalizarNumero(tarifaMinima);
     }
 
     if (tarifaMaxima !== undefined) {
-      datos.tarifaMaxima = normalizarNumero(tarifaMaxima);
+      datos.tarifaMaxima =
+        normalizarNumero(tarifaMaxima);
     }
 
     if (zonasCoberturaIds !== undefined) {
       datos.zonasCoberturaIds =
         zonasCoberturaIds === null
           ? null
-          : Array.from(zonasCoberturaIds, Number);
+          : Array.from(
+              zonasCoberturaIds,
+              Number
+            );
     }
 
     const response = await apiJava.put(
@@ -359,7 +469,10 @@ export const servicioService = {
     return response.data;
   },
 
-  cambiarEstado: async (id, estado) => {
+  cambiarEstado: async (
+    id,
+    estado
+  ) => {
     if (!id) {
       throw new Error(
         'El identificador del servicio es obligatorio.'
@@ -367,7 +480,9 @@ export const servicioService = {
     }
 
     if (!estado) {
-      throw new Error('El estado del servicio es obligatorio.');
+      throw new Error(
+        'El estado del servicio es obligatorio.'
+      );
     }
 
     const response = await apiJava.put(
@@ -385,11 +500,12 @@ export const servicioService = {
       );
     }
 
-    await apiJava.delete(`/api/servicios/${id}`);
+    await apiJava.delete(
+      `/api/servicios/${id}`
+    );
+
     return true;
   },
 };
 
-
-
-
+export default servicioService;

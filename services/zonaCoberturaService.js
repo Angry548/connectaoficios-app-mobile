@@ -31,6 +31,18 @@ const normalizarZona = (zona) => {
   };
 };
 
+const obtenerNombreZona = (zona) => {
+  const partes = [
+    zona?.localidad,
+    zona?.municipio,
+    zona?.departamento,
+  ]
+    .map((valor) => valor?.trim())
+    .filter(Boolean);
+
+  return partes.join(', ');
+};
+
 const listarActivas = async (options = {}) => {
   const response = await apiJava.get(
     '/api/zonas-cobertura',
@@ -243,6 +255,7 @@ export const zonaCoberturaService = {
   obtenerZonasDelServicio,
   obtenerDetalleZonasPorIds,
   guardarZonasDelServicio,
+  obtenerNombreZona,
 };
 
 export default zonaCoberturaService;

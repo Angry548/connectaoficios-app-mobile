@@ -26,6 +26,12 @@ export default function HomeClienteScreen({ navigation }) {
       ruta: 'BuscarServicios',
     },
     {
+      titulo: 'Ranking de trabajadores',
+      descripcion: 'Consulta los trabajadores mejor posicionados por su reputación.',
+      icono: 'trophy-outline',
+      ruta: 'RankingTrabajadores',
+    },
+    {
       titulo: 'Mis solicitudes',
       descripcion: 'Consulta y administra los servicios que has solicitado.',
       icono: 'document-text-outline',

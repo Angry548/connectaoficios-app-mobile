@@ -110,7 +110,7 @@ export default function DetallePromocionScreen({
   route,
 }) {
   const promocionId = route.params?.promocionId;
-const servicioTitulo = route.params?.servicioTitulo;
+  const servicioTitulo = route.params?.servicioTitulo;
 
   const [promocion, setPromocion] = useState(null);
   const [plan, setPlan] = useState(null);
@@ -202,6 +202,29 @@ const servicioTitulo = route.params?.servicioTitulo;
   const transaccionPendiente = transacciones.find(
     (item) => item.estado === 'PENDIENTE'
   );
+
+  const irAPago = () => {
+    if (!promocion || !plan) {
+      Alert.alert(
+        'No se puede continuar',
+        'No se pudo obtener la información necesaria para activar la promoción.'
+      );
+      return;
+    }
+
+    navigation.navigate('PagoPromocion', {
+      promocionId: promocion.id,
+      servicioTitulo:
+        servicioTitulo ||
+        `Servicio #${promocion.servicioId}`,
+      planNombre:
+        plan.nombre ||
+        promocion.planNombre ||
+        'Plan',
+      duracionDias: plan.duracionDias,
+      costoTotal: plan.precio,
+    });
+  };
 
   const cancelarTransaccion = () => {
     if (!transaccionPendiente) {
@@ -302,6 +325,7 @@ const servicioTitulo = route.params?.servicioTitulo;
             onRefresh={actualizar}
           />
         }
+        showsVerticalScrollIndicator={false}
       >
         {error ? (
           <View style={styles.errorCaja}>
@@ -322,13 +346,9 @@ const servicioTitulo = route.params?.servicioTitulo;
 
               <Pressable
                 style={styles.reintentar}
-                onPress={() =>
-                  cargarDetalle()
-                }
+                onPress={() => cargarDetalle()}
               >
-                <Text
-                  style={styles.reintentarTexto}
-                >
+                <Text style={styles.reintentarTexto}>
                   Reintentar
                 </Text>
               </Pressable>
@@ -352,9 +372,9 @@ const servicioTitulo = route.params?.servicioTitulo;
               </Text>
 
               <Text style={styles.servicio}>
-  {servicioTitulo ||
-    `Servicio #${promocion.servicioId}`}
-</Text>
+                {servicioTitulo ||
+                  `Servicio #${promocion.servicioId}`}
+              </Text>
 
               <View
                 style={[
@@ -612,8 +632,7 @@ const servicioTitulo = route.params?.servicioTitulo;
                             styles.transaccionTitulo
                           }
                         >
-                          Transacción #
-                          {transaccion.id}
+                          Transacción #{transaccion.id}
                         </Text>
 
                         <Text
@@ -708,6 +727,23 @@ const servicioTitulo = route.params?.servicioTitulo;
               })
             )}
 
+            {promocion.estado === 'PENDIENTE' ? (
+              <Pressable
+                style={styles.botonActivar}
+                onPress={irAPago}
+              >
+                <Ionicons
+                  name="card-outline"
+                  size={21}
+                  color="#FFFFFF"
+                />
+
+                <Text style={styles.botonActivarTexto}>
+                  Activar promoción
+                </Text>
+              </Pressable>
+            ) : null}
+
             {transaccionPendiente ? (
               <Pressable
                 style={[
@@ -742,8 +778,7 @@ const servicioTitulo = route.params?.servicioTitulo;
               </Pressable>
             ) : null}
 
-            {promocion.estado === 'PENDIENTE' &&
-            transaccionPendiente ? (
+            {promocion.estado === 'PENDIENTE' ? (
               <View style={styles.informacion}>
                 <Ionicons
                   name="information-circle-outline"
@@ -752,9 +787,9 @@ const servicioTitulo = route.params?.servicioTitulo;
                 />
 
                 <Text style={styles.informacionTexto}>
-                  La promoción se activará cuando la
-                  transacción sea aprobada por la
-                  administración.
+                  Para activar esta promoción debes
+                  completar el pago simulado. No se
+                  realizará ningún cobro real.
                 </Text>
               </View>
             ) : null}
@@ -770,6 +805,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
+
   encabezado: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -779,6 +815,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   botonVolver: {
     width: 42,
     height: 42,
@@ -788,39 +825,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
+
   encabezadoTexto: {
     flex: 1,
   },
+
   titulo: {
     fontSize: 22,
     fontWeight: '700',
     color: '#101828',
   },
+
   subtitulo: {
     fontSize: 13,
     color: '#667085',
     marginTop: 2,
   },
+
   scroll: {
     flex: 1,
   },
+
   contenido: {
     padding: 20,
     paddingBottom: 36,
   },
+
   centro: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   textoCarga: {
     marginTop: 12,
     fontSize: 14,
     color: '#667085',
   },
+
   flex: {
     flex: 1,
   },
+
   tarjetaPrincipal: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -830,6 +876,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 22,
   },
+
   iconoPrincipal: {
     width: 62,
     height: 62,
@@ -839,17 +886,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 13,
   },
+
   nombrePlan: {
     color: '#101828',
     fontWeight: '700',
     fontSize: 19,
     textAlign: 'center',
   },
+
   servicio: {
     color: '#667085',
     fontSize: 13,
     marginTop: 5,
   },
+
   estadoGrande: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -859,43 +909,51 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     marginTop: 14,
   },
+
   estadoGrandeTexto: {
     fontSize: 12,
     fontWeight: '700',
   },
+
   vigencia: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
     marginTop: 12,
   },
+
   puntoVigencia: {
     width: 8,
     height: 8,
     borderRadius: 4,
   },
+
   vigenciaTexto: {
     color: '#475467',
     fontSize: 12,
   },
+
   seccionTitulo: {
     color: '#101828',
     fontWeight: '700',
     fontSize: 16,
     marginBottom: 11,
   },
+
   seccionTituloFila: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 11,
     marginTop: 4,
   },
+
   seccionTituloSinMargen: {
     flex: 1,
     color: '#101828',
     fontWeight: '700',
     fontSize: 16,
   },
+
   contador: {
     minWidth: 28,
     height: 28,
@@ -908,6 +966,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
   },
+
   tarjeta: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -916,10 +975,12 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 22,
   },
+
   filaIcono: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   iconoDato: {
     width: 42,
     height: 42,
@@ -929,43 +990,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 11,
   },
+
   filaDato: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
+
   datoEtiqueta: {
     color: '#667085',
     fontSize: 12,
     marginBottom: 3,
   },
+
   datoValor: {
     color: '#101828',
     fontSize: 14,
     fontWeight: '600',
   },
+
   datosDobles: {
     flexDirection: 'row',
     gap: 12,
   },
+
   datoDoble: {
     flex: 1,
   },
+
   precio: {
     color: '#2563EB',
     fontWeight: '700',
     fontSize: 16,
   },
+
   descripcion: {
     color: '#475467',
     fontSize: 13,
     lineHeight: 20,
   },
+
   divisor: {
     height: 1,
     backgroundColor: '#EAECF0',
     marginVertical: 14,
   },
+
   tarjetaTransaccion: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -974,10 +1044,12 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
+
   transaccionSuperior: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   iconoTransaccion: {
     width: 42,
     height: 42,
@@ -987,56 +1059,67 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
+
   transaccionTitulo: {
     color: '#101828',
     fontSize: 14,
     fontWeight: '700',
   },
+
   transaccionFecha: {
     color: '#667085',
     fontSize: 11,
     marginTop: 3,
   },
+
   estadoPequeno: {
     borderRadius: 18,
     paddingHorizontal: 8,
     paddingVertical: 5,
   },
+
   estadoPequenoTexto: {
     fontSize: 9,
     fontWeight: '700',
   },
+
   transaccionImporte: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 15,
   },
+
   transaccionImporteEtiqueta: {
     color: '#667085',
     fontSize: 13,
   },
+
   transaccionImporteValor: {
     color: '#101828',
     fontSize: 16,
     fontWeight: '700',
   },
+
   referenciaCaja: {
     backgroundColor: '#F9FAFB',
     borderRadius: 10,
     padding: 10,
     marginTop: 12,
   },
+
   referenciaEtiqueta: {
     color: '#667085',
     fontSize: 11,
   },
+
   referenciaValor: {
     color: '#344054',
     fontSize: 12,
     fontWeight: '600',
     marginTop: 3,
   },
+
   vacio: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -1046,18 +1129,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+
   vacioTitulo: {
     color: '#101828',
     fontSize: 15,
     fontWeight: '700',
     marginTop: 10,
   },
+
   vacioTexto: {
     color: '#667085',
     fontSize: 12,
     textAlign: 'center',
     marginTop: 5,
   },
+
+  botonActivar: {
+    minHeight: 54,
+    borderRadius: 14,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 9,
+    paddingHorizontal: 18,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+
+  botonActivarTexto: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
   botonCancelar: {
     minHeight: 50,
     borderRadius: 13,
@@ -1071,14 +1176,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 12,
   },
+
   botonCancelarTexto: {
     color: '#B42318',
     fontSize: 14,
     fontWeight: '700',
   },
+
   botonDeshabilitado: {
     opacity: 0.5,
   },
+
   informacion: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1090,12 +1198,14 @@ const styles = StyleSheet.create({
     padding: 13,
     marginBottom: 10,
   },
+
   informacionTexto: {
     flex: 1,
     color: '#175CD3',
     fontSize: 12,
     lineHeight: 18,
   },
+
   errorCaja: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1106,21 +1216,25 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
   },
+
   errorTitulo: {
     color: '#B42318',
     fontWeight: '700',
     fontSize: 14,
   },
+
   errorTexto: {
     color: '#B42318',
     fontSize: 12,
     lineHeight: 18,
     marginTop: 3,
   },
+
   reintentar: {
     alignSelf: 'flex-start',
     marginTop: 10,
   },
+
   reintentarTexto: {
     color: '#B42318',
     fontSize: 13,

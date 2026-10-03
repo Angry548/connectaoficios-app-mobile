@@ -1,4 +1,5 @@
 import React, {
+  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -111,6 +112,32 @@ export default function CrearSolicitudScreen({
 
   const [enviando, setEnviando] =
     useState(false);
+
+  const [alturaTeclado, setAlturaTeclado] =
+    useState(0);
+
+  useEffect(() => {
+    const mostrarTeclado = Keyboard.addListener(
+      'keyboardDidShow',
+      (event) => {
+        setAlturaTeclado(
+          event.endCoordinates.height
+        );
+      }
+    );
+
+    const ocultarTeclado = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setAlturaTeclado(0);
+      }
+    );
+
+    return () => {
+      mostrarTeclado.remove();
+      ocultarTeclado.remove();
+    };
+  }, []);
 
   const fechaMinima = useMemo(
     () => obtenerFechaMinima(),
@@ -453,9 +480,13 @@ export default function CrearSolicitudScreen({
       >
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={
-            styles.contenido
-          }
+          contentContainerStyle={[
+            styles.contenido,
+            alturaTeclado > 0 && {
+              paddingBottom:
+                alturaTeclado + 24,
+            },
+          ]}
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}

@@ -22,7 +22,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import promocionService from '../../services/promocionService';
 import planPromocionService from '../../services/planPromocionService';
-import transaccionPagoService from '../../services/transaccionPagoService';
 import { servicioService } from '../../services/servicioService';
 
 const ESTADOS = [
@@ -460,83 +459,90 @@ export default function PromocionesScreen({
   };
 
   const crearPromocion = async () => {
-    if (!servicioSeleccionado?.id) {
-      Alert.alert(
-        'Servicio requerido',
-        'Selecciona el servicio que deseas promocionar.'
-      );
-      return;
-    }
-
-    if (!planSeleccionado?.id) {
-      Alert.alert(
-        'Plan requerido',
-        'Selecciona un plan de promoción.'
-      );
-      return;
-    }
-
-    if (!resumen) {
-      Alert.alert(
-        'Resumen no disponible',
-        'Espera a que se cargue el resumen de la promoción.'
-      );
-      return;
-    }
-
+  if (!servicioSeleccionado?.id) {
     Alert.alert(
-      'Confirmar promoción',
-      `Se creará la promoción "${resumen.planNombre}" para "${resumen.servicioTitulo}" por $${Number(
-        resumen.costoTotal
-      ).toFixed(2)} USD.`,
-      [
-        {
-          text: 'Volver',
-          style: 'cancel',
-        },
-        {
-          text: 'Continuar',
-          onPress: async () => {
-            setProcesando(true);
-
-            try {
-              const promocion =
-                await promocionService.crear(
-                  servicioSeleccionado.id,
-                  planSeleccionado.id
-                );
-
-              await transaccionPagoService.crear(
-                promocion.id,
-                resumen.costoTotal,
-                'USD'
-              );
-
-              Alert.alert(
-                'Solicitud registrada',
-                'La promoción y su transacción fueron registradas. La promoción permanecerá pendiente hasta que la transacción sea aprobada.'
-              );
-
-              cerrarCreacion();
-              await cargarDatos(false);
-            } catch (err) {
-              Alert.alert(
-                'No se pudo crear la promoción',
-                obtenerMensajeError(
-                  err,
-                  'Ocurrió un error al registrar la promoción.'
-                )
-              );
-
-              await cargarDatos(false);
-            } finally {
-              setProcesando(false);
-            }
-          },
-        },
-      ]
+      'Servicio requerido',
+      'Selecciona el servicio que deseas promocionar.'
     );
-  };
+    return;
+  }
+
+  if (!planSeleccionado?.id) {
+    Alert.alert(
+      'Plan requerido',
+      'Selecciona un plan de promoción.'
+    );
+    return;
+  }
+
+  if (!resumen) {
+    Alert.alert(
+      'Resumen no disponible',
+      'Espera a que se cargue el resumen de la promoción.'
+    );
+    return;
+  }
+
+  Alert.alert(
+    'Continuar al pago',
+    `Promocionarás "${resumen.servicioTitulo}" con el plan "${resumen.planNombre}" por $${Number(
+      resumen.costoTotal
+    ).toFixed(2)} USD.`,
+    [
+      {
+        text: 'Volver',
+        style: 'cancel',
+      },
+      {
+        text: 'Continuar',
+        onPress: async () => {
+          setProcesando(true);
+
+          try {
+            const promocion =
+              await promocionService.crear(
+                servicioSeleccionado.id,
+                planSeleccionado.id
+              );
+
+            Keyboard.dismiss();
+
+            const datosPago = {
+              promocionId: promocion.id,
+              servicioTitulo:
+                resumen.servicioTitulo,
+              planNombre:
+                resumen.planNombre,
+              duracionDias:
+                resumen.duracionDias,
+              costoTotal:
+                resumen.costoTotal,
+            };
+
+            cerrarCreacion();
+
+            navigation.navigate(
+              'PagoPromocion',
+              datosPago
+            );
+          } catch (err) {
+            Alert.alert(
+              'No se pudo continuar',
+              obtenerMensajeError(
+                err,
+                'Ocurrió un error al preparar la promoción.'
+              )
+            );
+
+            await cargarDatos(false);
+          } finally {
+            setProcesando(false);
+          }
+        },
+      },
+    ]
+  );
+};
 
   const promocionesFiltradas = promociones.filter(
     (promocion) => {

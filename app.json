@@ -15,7 +15,11 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.remate827.connectaoficiosmobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -29,6 +33,11 @@
           "photosPermission": "ConnectaOficios necesita acceso a tus fotos para seleccionar tu fotografía de perfil."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "126f28fb-0c18-45da-8a2a-3e5de92525d9"
+      }
+    }
   }
 }

@@ -15,12 +15,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { servicioService } from '../../services/servicioService';
+import promocionService from '../../services/promocionService';
 
 export default function MisServiciosScreen({
   navigation,
 }) {
   const [servicios, setServicios] = useState([]);
   const [categorias, setCategorias] = useState([]);
+  const [promocionesActivas, setPromocionesActivas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [actualizando, setActualizando] = useState(false);
   const [error, setError] = useState('');
@@ -35,12 +37,27 @@ export default function MisServiciosScreen({
 
       try {
         const [
-          serviciosObtenidos,
-          categoriasObtenidas,
-        ] = await Promise.all([
-          servicioService.listarMisServicios(),
-          servicioService.listarCategorias(),
-        ]);
+  serviciosObtenidos,
+  categoriasObtenidas,
+  promocionesObtenidas,
+] = await Promise.all([
+  servicioService.listarMisServicios(),
+  servicioService.listarCategorias(),
+  promocionService.obtenerMisPromociones(),
+]);
+
+const promocionesVigentes =
+  Array.isArray(promocionesObtenidas)
+    ? promocionesObtenidas.filter(
+        (promocion) =>
+          promocion.estado === 'ACTIVA' &&
+          promocion.vigente === true
+      )
+    : [];
+
+setPromocionesActivas(
+  promocionesVigentes
+);
 
         setServicios(
           Array.isArray(serviciosObtenidos)
@@ -63,6 +80,7 @@ export default function MisServiciosScreen({
         setError(mensaje);
         setServicios([]);
         setCategorias([]);
+        setPromocionesActivas([]);
       } finally {
         setCargando(false);
         setActualizando(false);
@@ -131,6 +149,15 @@ export default function MisServiciosScreen({
 
     return `Desde $${minima.toFixed(2)}`;
   };
+
+  const servicioEstaDestacado = (servicioId) =>
+  promocionesActivas.some(
+    (promocion) =>
+      Number(promocion.servicioId) ===
+        Number(servicioId) &&
+      promocion.estado === 'ACTIVA' &&
+      promocion.vigente === true
+  );
 
   if (cargando) {
     return (
@@ -323,6 +350,19 @@ export default function MisServiciosScreen({
                         servicio.estado
                       )}
                     </Text>
+                    {servicioEstaDestacado(servicio.id) ? (
+  <View style={styles.destacadoContenedor}>
+    <Ionicons
+      name="star"
+      size={14}
+      color="#B54708"
+    />
+
+    <Text style={styles.destacadoTexto}>
+      Servicio destacado
+    </Text>
+  </View>
+) : null}
                   </View>
                 </View>
 
@@ -759,4 +799,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
   },
+
+  destacadoContenedor: {
+  alignSelf: 'flex-start',
+  marginTop: 7,
+  paddingHorizontal: 9,
+  paddingVertical: 5,
+  borderRadius: 999,
+  backgroundColor: '#FFFAEB',
+  borderWidth: 1,
+  borderColor: '#FEDF89',
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 5,
+},
+destacadoTexto: {
+  fontSize: 12,
+  fontWeight: '700',
+  color: '#B54708',
+},
 });

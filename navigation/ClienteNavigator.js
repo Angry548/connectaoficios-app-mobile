@@ -10,6 +10,7 @@ import DetalleServicioScreen from '../screens/cliente/DetalleServicioScreen';
 import PerfilPublicoTrabajadorScreen from '../screens/cliente/PerfilPublicoTrabajadorScreen';
 import ResenasTrabajadorScreen from '../screens/cliente/ResenasTrabajadorScreen';
 import CrearResenaScreen from '../screens/cliente/CrearResenaScreen';
+import RankingTrabajadoresScreen from '../screens/cliente/RankingTrabajadoresScreen';
 
 import CrearSolicitudScreen from '../screens/cliente/CrearSolicitudScreen';
 import MisSolicitudesScreen from '../screens/cliente/MisSolicitudesScreen';
@@ -69,6 +70,11 @@ export default function ClienteNavigator() {
       <Stack.Screen
         name="CrearResena"
         component={CrearResenaScreen}
+      />
+
+      <Stack.Screen
+        name="RankingTrabajadores"
+        component={RankingTrabajadoresScreen}
       />
 
       <Stack.Screen

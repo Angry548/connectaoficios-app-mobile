@@ -3,6 +3,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+
 import {
   ActivityIndicator,
   Alert,
@@ -16,8 +17,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+
 import { solicitudService } from '../../services/solicitudService';
 import { userService } from '../../services/userService';
 
@@ -173,14 +177,22 @@ export default function DetalleSolicitudClienteScreen({
 
   const [solicitud, setSolicitud] =
     useState(null);
+
   const [trabajador, setTrabajador] =
     useState(null);
+
   const [cargando, setCargando] =
     useState(true);
+
   const [cancelando, setCancelando] =
     useState(false);
-  const [motivo, setMotivo] = useState('');
-  const [error, setError] = useState(null);
+
+  const [motivo, setMotivo] =
+    useState('');
+
+  const [error, setError] =
+    useState(null);
+
   const [alturaTeclado, setAlturaTeclado] =
     useState(0);
 
@@ -263,6 +275,12 @@ export default function DetalleSolicitudClienteScreen({
     [solicitudId]
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      cargarDetalle(false);
+    }, [cargarDetalle])
+  );
+
   useEffect(() => {
     cargarDetalle();
   }, [cargarDetalle]);
@@ -338,6 +356,20 @@ export default function DetalleSolicitudClienteScreen({
     });
   };
 
+  const abrirCalificacion = () => {
+    Keyboard.dismiss();
+
+    navigation.navigate('CrearResena', {
+      solicitudId: solicitud.idSolicitud,
+      servicioId: solicitud.servicioId,
+      servicioTitulo: solicitud.servicioTitulo,
+      trabajadorId: solicitud.trabajadorId,
+      trabajadorNombre:
+        trabajador?.nombre ||
+        `Trabajador #${solicitud.trabajadorId}`,
+    });
+  };
+
   const estadoActual = String(
     solicitud?.estado || ''
   ).toUpperCase();
@@ -351,6 +383,9 @@ export default function DetalleSolicitudClienteScreen({
     'ACEPTADA',
     'EN_PROCESO',
   ].includes(estadoActual);
+
+  const puedeCalificar =
+    estadoActual === 'COMPLETADA';
 
   if (cargando) {
     return (
@@ -795,6 +830,70 @@ export default function DetalleSolicitudClienteScreen({
             </View>
           ) : null}
 
+          {puedeCalificar ? (
+            <View style={styles.tarjetaCalificacion}>
+              <View
+                style={styles.tituloSeccionFila}
+              >
+                <View
+                  style={styles.iconoSeccionEstrella}
+                >
+                  <Ionicons
+                    name="star"
+                    size={20}
+                    color="#F59E0B"
+                  />
+                </View>
+
+                <Text
+                  style={styles.tituloSeccion}
+                >
+                  Califica el servicio
+                </Text>
+              </View>
+
+              <Text style={styles.ayuda}>
+                El servicio fue completado.
+                Comparte tu experiencia y califica
+                el trabajo realizado.
+              </Text>
+
+              <View
+                style={styles.estrellasVista}
+              >
+                {[1, 2, 3, 4, 5].map(
+                  (estrella) => (
+                    <Ionicons
+                      key={estrella}
+                      name="star"
+                      size={23}
+                      color="#F59E0B"
+                    />
+                  )
+                )}
+              </View>
+
+              <Pressable
+                style={styles.botonCalificar}
+                onPress={abrirCalificacion}
+              >
+                <Ionicons
+                  name="star-outline"
+                  size={19}
+                  color="#FFFFFF"
+                />
+
+                <Text
+                  style={
+                    styles.botonCalificarTexto
+                  }
+                >
+                  Calificar servicio
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {puedeCancelar ? (
             <View style={styles.tarjeta}>
               <View
@@ -880,40 +979,32 @@ export default function DetalleSolicitudClienteScreen({
           ) : null}
 
           {!puedeCancelar &&
-          !chatDisponible ? (
+          !chatDisponible &&
+          !puedeCalificar ? (
             <View style={styles.estadoFinal}>
               <Ionicons
                 name={
-                  estadoActual === 'COMPLETADA'
-                    ? 'checkmark-circle-outline'
-                    : estadoActual ===
-                        'RECHAZADA'
-                      ? 'close-circle-outline'
-                      : 'information-circle-outline'
+                  estadoActual === 'RECHAZADA'
+                    ? 'close-circle-outline'
+                    : 'information-circle-outline'
                 }
                 size={23}
                 color={
-                  estadoActual === 'COMPLETADA'
-                    ? '#027A48'
-                    : estadoActual ===
-                        'RECHAZADA'
-                      ? '#B42318'
-                      : '#667085'
+                  estadoActual === 'RECHAZADA'
+                    ? '#B42318'
+                    : '#667085'
                 }
               />
 
               <Text
                 style={styles.estadoFinalTexto}
               >
-                {estadoActual === 'COMPLETADA'
-                  ? 'Este servicio fue completado.'
+                {estadoActual === 'RECHAZADA'
+                  ? 'Esta solicitud fue rechazada.'
                   : estadoActual ===
-                      'RECHAZADA'
-                    ? 'Esta solicitud fue rechazada.'
-                    : estadoActual ===
-                        'CANCELADA'
-                      ? 'Esta solicitud fue cancelada.'
-                      : 'Esta solicitud ya no admite cambios.'}
+                      'CANCELADA'
+                    ? 'Esta solicitud fue cancelada.'
+                    : 'Esta solicitud ya no admite cambios.'}
               </Text>
             </View>
           ) : null}
@@ -928,9 +1019,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
+
   flex: {
     flex: 1,
   },
+
   encabezado: {
     minHeight: 76,
     paddingHorizontal: 18,
@@ -940,6 +1033,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   botonVolver: {
     width: 44,
     height: 44,
@@ -948,46 +1042,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   encabezadoTexto: {
     flex: 1,
     alignItems: 'center',
   },
+
   titulo: {
     fontSize: 19,
     fontWeight: '700',
     color: '#101828',
   },
+
   subtitulo: {
     marginTop: 2,
     fontSize: 12,
     color: '#667085',
   },
+
   espacio: {
     width: 44,
   },
+
   scroll: {
     flex: 1,
   },
+
   contenido: {
     padding: 18,
     paddingBottom: 40,
   },
+
   cargando: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   cargandoTexto: {
     marginTop: 12,
     fontSize: 14,
     color: '#667085',
   },
+
   errorPantalla: {
     flex: 1,
     paddingHorizontal: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   iconoError: {
     width: 76,
     height: 76,
@@ -996,6 +1100,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   estadoTitulo: {
     marginTop: 15,
     fontSize: 18,
@@ -1003,6 +1108,7 @@ const styles = StyleSheet.create({
     color: '#101828',
     textAlign: 'center',
   },
+
   estadoTexto: {
     marginTop: 7,
     fontSize: 13,
@@ -1010,6 +1116,7 @@ const styles = StyleSheet.create({
     color: '#667085',
     textAlign: 'center',
   },
+
   botonReintentar: {
     marginTop: 20,
     backgroundColor: '#2563EB',
@@ -1017,10 +1124,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
   },
+
   botonReintentarTexto: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
+
   tarjetaPrincipal: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -1029,10 +1138,12 @@ const styles = StyleSheet.create({
     padding: 17,
     marginBottom: 13,
   },
+
   tarjetaSuperior: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   iconoServicio: {
     width: 48,
     height: 48,
@@ -1042,20 +1153,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
+
   servicioInformacion: {
     flex: 1,
     marginRight: 8,
   },
+
   servicioTitulo: {
     fontSize: 16,
     fontWeight: '700',
     color: '#101828',
   },
+
   solicitudNumero: {
     marginTop: 4,
     fontSize: 12,
     color: '#667085',
   },
+
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1064,10 +1179,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 4,
   },
+
   badgeTexto: {
     fontSize: 11,
     fontWeight: '700',
   },
+
   tarjeta: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -1076,11 +1193,22 @@ const styles = StyleSheet.create({
     padding: 17,
     marginBottom: 13,
   },
+
+  tarjetaCalificacion: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 17,
+    padding: 17,
+    marginBottom: 13,
+  },
+
   tituloSeccionFila: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 13,
   },
+
   iconoSeccion: {
     width: 36,
     height: 36,
@@ -1090,20 +1218,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
+
+  iconoSeccionEstrella: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+
   iconoSeccionRojo: {
     backgroundColor: '#FEE4E2',
   },
+
   tituloSeccion: {
     flex: 1,
     fontSize: 16,
     fontWeight: '700',
     color: '#101828',
   },
+
   filaDato: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingVertical: 9,
   },
+
   iconoDato: {
     width: 38,
     height: 38,
@@ -1113,37 +1255,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 11,
   },
+
   datoContenido: {
     flex: 1,
   },
+
   datoEtiqueta: {
     fontSize: 12,
     fontWeight: '600',
     color: '#667085',
   },
+
   datoValor: {
     marginTop: 3,
     fontSize: 14,
     lineHeight: 20,
     color: '#101828',
   },
+
   descripcionContenedor: {
     marginTop: 10,
     paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: '#EAECF0',
   },
+
   descripcionEtiqueta: {
     fontSize: 12,
     fontWeight: '600',
     color: '#667085',
   },
+
   descripcionTexto: {
     marginTop: 7,
     fontSize: 14,
     lineHeight: 21,
     color: '#344054',
   },
+
   motivoAlerta: {
     marginTop: 12,
     borderRadius: 13,
@@ -1151,6 +1300,7 @@ const styles = StyleSheet.create({
     padding: 13,
     flexDirection: 'row',
   },
+
   motivoAlertaIcono: {
     width: 34,
     height: 34,
@@ -1160,20 +1310,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
+
   motivoAlertaContenido: {
     flex: 1,
   },
+
   motivoAlertaTitulo: {
     fontSize: 12,
     fontWeight: '700',
     color: '#B42318',
   },
+
   motivoAlertaTexto: {
     marginTop: 4,
     fontSize: 13,
     lineHeight: 19,
     color: '#912018',
   },
+
   motivoCancelacion: {
     marginTop: 12,
     borderRadius: 13,
@@ -1181,6 +1335,7 @@ const styles = StyleSheet.create({
     padding: 13,
     flexDirection: 'row',
   },
+
   motivoCancelacionIcono: {
     width: 34,
     height: 34,
@@ -1190,23 +1345,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
+
   motivoCancelacionTitulo: {
     fontSize: 12,
     fontWeight: '700',
     color: '#344054',
   },
+
   motivoCancelacionTexto: {
     marginTop: 4,
     fontSize: 13,
     lineHeight: 19,
     color: '#475467',
   },
+
   ayuda: {
     fontSize: 13,
     lineHeight: 19,
     color: '#667085',
     marginBottom: 13,
   },
+
   botonChat: {
     minHeight: 50,
     borderRadius: 12,
@@ -1216,11 +1375,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
   },
+
   botonChatTexto: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
   },
+
+  estrellasVista: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    gap: 5,
+  },
+
+  botonCalificar: {
+    minHeight: 50,
+    borderRadius: 12,
+    backgroundColor: '#0D9488',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+
+  botonCalificarTexto: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
   campoMotivo: {
     minHeight: 112,
     maxHeight: 180,
@@ -1235,14 +1419,17 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: '#101828',
   },
+
   contadorFila: {
     alignItems: 'flex-end',
     marginTop: 6,
   },
+
   contador: {
     fontSize: 11,
     color: '#98A2B3',
   },
+
   botonCancelar: {
     marginTop: 13,
     minHeight: 50,
@@ -1253,14 +1440,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
   },
+
   botonCancelarTexto: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
   },
+
   botonDeshabilitado: {
     opacity: 0.6,
   },
+
   estadoFinal: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -1270,6 +1460,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   estadoFinalTexto: {
     flex: 1,
     marginLeft: 10,

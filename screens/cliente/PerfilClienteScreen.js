@@ -91,41 +91,6 @@ export default function PerfilClienteScreen({ navigation }) {
 
         <View style={styles.seccion}>
           <Text style={styles.tituloSeccion}>
-            Mi cuenta
-          </Text>
-
-          <TouchableOpacity
-            style={styles.opcion}
-            activeOpacity={0.8}
-          >
-            <View style={styles.iconoOpcion}>
-              <Ionicons
-                name="person-outline"
-                size={22}
-                color="#0D9488"
-              />
-            </View>
-
-            <View style={styles.textoOpcion}>
-              <Text style={styles.tituloOpcion}>
-                Datos personales
-              </Text>
-
-              <Text style={styles.descripcionOpcion}>
-                Consulta y administra la información de tu cuenta.
-              </Text>
-            </View>
-
-            <Ionicons
-              name="chevron-forward-outline"
-              size={21}
-              color="#94A3B8"
-            />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.seccion}>
-          <Text style={styles.tituloSeccion}>
             Seguridad
           </Text>
 
