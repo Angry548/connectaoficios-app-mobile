@@ -1,3 +1,7 @@
+import PaginationControls from '../../components/PaginationControls';
+import { useUnreadMessages } from '../../context/UnreadMessagesContext';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useMemo,
@@ -6,7 +10,6 @@ import React, {
 
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -40,9 +43,8 @@ import {
   userService,
 } from '../../services/userService';
 
-import {
-  perfilTrabajadorService,
-} from '../../services/perfilTrabajadorService';
+import UserAvatar from '../../components/UserAvatar';
+import { obtenerFotoInterlocutor } from '../../services/avatarConversacion';
 
 import {
   secureStorage,
@@ -84,21 +86,7 @@ const obtenerMiId = async () => {
   return id;
 };
 
-const obtenerMensajeError = (error) => {
-  const data = error?.response?.data;
-
-  if (typeof data === 'string') {
-    return data;
-  }
-
-  return (
-    data?.message ||
-    data?.mensaje ||
-    data?.error ||
-    error?.message ||
-    'No fue posible cargar las conversaciones.'
-  );
-};
+const obtenerMensajeError = (error, fallback = "No fue posible cargar las conversaciones.") => mensajeError(error, fallback);
 
 const formatearFecha = (fecha) => {
   if (!fecha) {
@@ -146,6 +134,7 @@ const formatearFecha = (fecha) => {
 export default function ConversacionesScreen({
   navigation,
 }) {
+  const { refrescarNoLeidos } = useUnreadMessages();
   const [
     conversaciones,
     setConversaciones,
@@ -162,18 +151,13 @@ export default function ConversacionesScreen({
   ] = useState({});
 
   const [
-    fotos,
-    setFotos,
-  ] = useState({});
-
-  const [
     noLeidos,
     setNoLeidos,
   ] = useState({});
 
   const [
     busqueda,
-    setBusqueda,
+    setBusquedaBase,
   ] = useState('');
 
   const [
@@ -191,178 +175,60 @@ export default function ConversacionesScreen({
     setError,
   ] = useState('');
 
-  const cargar = useCallback(
-    async (esRefresh = false) => {
-      if (esRefresh) {
-        setRefrescando(true);
-      } else {
-        setCargando(true);
-      }
-
-      setError('');
-
-      try {
-        const miId =
-          await obtenerMiId();
-
-        const pagina =
-          await conversacionService
-            .obtenerConversacionesPaginadas({
-              pagina: 0,
-              tamanio: 100,
-            });
-
-        const lista =
-          pagina?.contenido ?? [];
-
-        setUsuarioId(miId);
-        setConversaciones(lista);
-
-        const idsOtrosUsuarios = [
-          ...new Set(
-            lista
-              .map((conversacion) =>
-                Number(
-                  conversacion.clienteId
-                ) === Number(miId)
-                  ? Number(
-                      conversacion.trabajadorId
-                    )
-                  : Number(
-                      conversacion.clienteId
-                    )
-              )
-              .filter(
-                (id) =>
-                  Number.isInteger(id) &&
-                  id > 0
-              )
-          ),
-        ];
-
-        const idsTrabajadoresVisibles = [
-          ...new Set(
-            lista
-              .filter(
-                (conversacion) =>
-                  Number(
-                    conversacion.clienteId
-                  ) === Number(miId)
-              )
-              .map(
-                (conversacion) =>
-                  Number(
-                    conversacion.trabajadorId
-                  )
-              )
-              .filter(
-                (id) =>
-                  Number.isInteger(id) &&
-                  id > 0
-              )
-          ),
-        ];
-
-        const [
-          usuariosObtenidos,
-          conteos,
-          perfilesTrabajadores,
-        ] = await Promise.all([
-          userService
-            .obtenerUsuariosPorIds(
-              idsOtrosUsuarios
-            ),
-
-          Promise.all(
-            lista.map(
-              async (conversacion) => {
-                try {
-                  const cantidad =
-                    await mensajeService
-                      .contarNoLeidos(
-                        conversacion.id
-                      );
-
-                  return [
-                    conversacion.id,
-                    cantidad,
-                  ];
-                } catch {
-                  return [
-                    conversacion.id,
-                    0,
-                  ];
-                }
-              }
-            )
-          ),
-
-          Promise.all(
-            idsTrabajadoresVisibles.map(
-              async (trabajadorId) => {
-                try {
-                  const perfil =
-                    await perfilTrabajadorService
-                      .obtenerPerfilPorTrabajador(
-                        trabajadorId
-                      );
-
-                  return [
-                    trabajadorId,
-                    perfil?.fotoUrl ?? null,
-                  ];
-                } catch {
-                  return [
-                    trabajadorId,
-                    null,
-                  ];
-                }
-              }
-            )
-          ),
-        ]);
-
-        setUsuarios(
-          usuariosObtenidos ?? {}
-        );
-
-        const mapaConteos = {};
-
-        conteos.forEach(
-          ([id, cantidad]) => {
-            mapaConteos[id] =
-              cantidad;
-          }
-        );
-
-        setNoLeidos(mapaConteos);
-
-        const mapaFotos = {};
-
-        perfilesTrabajadores.forEach(
-          ([trabajadorId, fotoUrl]) => {
-            mapaFotos[trabajadorId] =
-              fotoUrl;
-          }
-        );
-
-        setFotos(mapaFotos);
-      } catch (err) {
-        setError(
-          obtenerMensajeError(err)
-        );
-      } finally {
+  const paginacion = usePagination('');
+  const setBusqueda = valor => { setBusquedaBase(valor); paginacion.setPagina(0); };
+  const cargar = useCallback(async (esRefresh = false) => {
+    const solicitudPagina = paginacion.iniciarSolicitud();
+    if (esRefresh) {
+      setRefrescando(true);
+    } else {
+      setCargando(true);
+    }
+    setError('');
+    try {
+      const miId = await obtenerMiId();
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const pagina = await conversacionService.obtenerConversacionesPaginadas({
+        pagina: paginacion.pagina,
+        tamanio: 10
+      });
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const lista = pagina?.contenido ?? [];
+      paginacion.registrar(pagina);
+      setUsuarioId(miId);
+      setConversaciones(lista);
+      const idsOtrosUsuarios = [...new Set(lista.map(conversacion => Number(conversacion.clienteId) === Number(miId) ? Number(conversacion.trabajadorId) : Number(conversacion.clienteId)).filter(id => Number.isInteger(id) && id > 0))];
+      const [usuariosObtenidos, conteos] = await Promise.all([userService.obtenerUsuariosPorIds(idsOtrosUsuarios), Promise.all(lista.map(async conversacion => {
+        try {
+          const cantidad = await mensajeService.contarNoLeidos(conversacion.id);
+          return [conversacion.id, cantidad];
+        } catch {
+          return [conversacion.id, 0];
+        }
+      }))]);
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setUsuarios(usuariosObtenidos ?? {});
+      const mapaConteos = {};
+      conteos.forEach(([id, cantidad]) => {
+        mapaConteos[id] = cantidad;
+      });
+      setNoLeidos(mapaConteos);
+    } catch (err) {
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setError(obtenerMensajeError(err));
+    } finally {
+      if (paginacion.esActual(solicitudPagina)) {
         setCargando(false);
         setRefrescando(false);
       }
-    },
-    []
-  );
+    }
+  }, [paginacion.pagina]);
 
   useFocusEffect(
     useCallback(() => {
+      void refrescarNoLeidos();
       cargar();
-    }, [cargar])
+    }, [cargar, refrescarNoLeidos])
   );
 
   const conversacionesFiltradas =
@@ -435,14 +301,7 @@ export default function ConversacionesScreen({
           : `Cliente #${otroId}`
       );
 
-    const foto =
-      soyCliente
-        ? fotos?.[
-            Number(
-              conversacion.trabajadorId
-            )
-          ] ?? null
-        : null;
+    const foto = obtenerFotoInterlocutor(conversacion, usuarioId);
 
     return {
       soyCliente,
@@ -606,7 +465,7 @@ export default function ConversacionesScreen({
             }
             value={busqueda}
             onChangeText={setBusqueda}
-            placeholder="Buscar conversación..."
+            placeholder="Buscar en esta página: conversación..."
             placeholderTextColor="#98A2B3"
             returnKeyType="search"
           />
@@ -758,28 +617,7 @@ export default function ConversacionesScreen({
                       styles.avatarContenedor
                     }
                   >
-                    {datos.foto ? (
-                      <Image
-                        source={{
-                          uri: datos.foto,
-                        }}
-                        style={
-                          styles.avatarFoto
-                        }
-                      />
-                    ) : (
-                      <View
-                        style={
-                          styles.avatarVacio
-                        }
-                      >
-                        <Ionicons
-                          name="person"
-                          size={22}
-                          color="#2563EB"
-                        />
-                      </View>
-                    )}
+                    <UserAvatar fotoUrl={datos.foto} nombre={datos.nombre} size={48} />
 
                     {conversacion
                       .puedeEnviarMensajes ? (
@@ -923,6 +761,7 @@ export default function ConversacionesScreen({
             }
           )
         )}
+        {!cargando && !error ? <PaginationControls {...paginacion.props} notice={busqueda.trim() ? 'La búsqueda se aplica a los registros de esta página.' : null} loading={cargando} /> : null}
       </ScrollView>
     </SafeAreaView>
   );

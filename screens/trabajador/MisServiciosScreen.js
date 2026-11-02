@@ -1,3 +1,7 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { listadosPaginados } from '../../services/listadosPaginados';
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useState,
@@ -20,6 +24,7 @@ import promocionService from '../../services/promocionService';
 export default function MisServiciosScreen({
   navigation,
 }) {
+  const paginacion = usePagination();
   const [servicios, setServicios] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [promocionesActivas, setPromocionesActivas] = useState([]);
@@ -27,67 +32,40 @@ export default function MisServiciosScreen({
   const [actualizando, setActualizando] = useState(false);
   const [error, setError] = useState('');
 
-  const cargarServicios = useCallback(
-    async (mostrarCarga = true) => {
-      if (mostrarCarga) {
-        setCargando(true);
-      }
-
-      setError('');
-
-      try {
-        const [
-  serviciosObtenidos,
-  categoriasObtenidas,
-  promocionesObtenidas,
-] = await Promise.all([
-  servicioService.listarMisServicios(),
-  servicioService.listarCategorias(),
-  promocionService.obtenerMisPromociones(),
-]);
-
-const promocionesVigentes =
-  Array.isArray(promocionesObtenidas)
-    ? promocionesObtenidas.filter(
-        (promocion) =>
-          promocion.estado === 'ACTIVA' &&
-          promocion.vigente === true
-      )
-    : [];
-
-setPromocionesActivas(
-  promocionesVigentes
-);
-
-        setServicios(
-          Array.isArray(serviciosObtenidos)
-            ? serviciosObtenidos
-            : []
-        );
-
-        setCategorias(
-          Array.isArray(categoriasObtenidas)
-            ? categoriasObtenidas
-            : []
-        );
-      } catch (err) {
-        const mensaje =
-          err?.response?.data?.message ||
-          err?.response?.data?.mensaje ||
-          err?.message ||
-          'No se pudieron cargar los servicios.';
-
-        setError(mensaje);
-        setServicios([]);
-        setCategorias([]);
-        setPromocionesActivas([]);
-      } finally {
+  const cargarServicios = useCallback(async (mostrarCarga = true) => {
+    const solicitudPagina = paginacion.iniciarSolicitud();
+    if (mostrarCarga) {
+      setCargando(true);
+    }
+    setError('');
+    try {
+      const respuestaServicios = await listadosPaginados.misServicios(paginacion.pagina);
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const serviciosObtenidos = paginacion.registrar(respuestaServicios);
+      const [categoriasObtenidas, promocionesObtenidas] = await Promise.all([
+        Promise.all([...new Set(serviciosObtenidos.map(s => s.categoriaId))].filter(Boolean)
+          .map(id => servicioService.obtenerCategoriaPorId(id).catch(() => null))),
+        promocionService.obtenerMisPromociones(),
+      ]);
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const promocionesVigentes = Array.isArray(promocionesObtenidas) ? promocionesObtenidas.filter(promocion => promocion.estado === 'ACTIVA' && promocion.vigente === true) : [];
+      setPromocionesActivas(promocionesVigentes);
+      setServicios(serviciosObtenidos);
+      setCategorias(categoriasObtenidas.filter(Boolean));
+    } catch (err) {
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const mensaje = mensajeError(err, "No se pudieron cargar los servicios.");
+      setError(mensaje);
+      setServicios([]);
+      setCategorias([]);
+      setPromocionesActivas([]);
+    } finally {
+      if (paginacion.esActual(solicitudPagina)) {
         setCargando(false);
         setActualizando(false);
       }
-    },
-    []
-  );
+    }
+  }, [paginacion.pagina]);
 
   useFocusEffect(
     useCallback(() => {
@@ -303,7 +281,7 @@ setPromocionesActivas(
             <Text style={styles.resultados}>
               {servicios.length === 1
                 ? '1 servicio publicado'
-                : `${servicios.length} servicios publicados`}
+                : `${paginacion.props.totalItems} servicios publicados`}
             </Text>
 
             {servicios.map((servicio) => (
@@ -513,6 +491,7 @@ setPromocionesActivas(
                 </View>
               </View>
             ))}
+        {!cargando && !error ? <PaginationControls {...paginacion.props} loading={cargando} /> : null}
 
             <Pressable
               style={

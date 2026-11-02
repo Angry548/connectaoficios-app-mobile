@@ -37,3 +37,5 @@ opencode.json
 .opencode/
 AGENTS.md
 .agents/
+# Reportes temporales de Component Testing
+coverage/

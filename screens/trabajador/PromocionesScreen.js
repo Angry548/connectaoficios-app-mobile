@@ -1,3 +1,6 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { listadosPaginados } from '../../services/listadosPaginados';
 import React, {
   useCallback,
   useEffect,
@@ -122,13 +125,15 @@ export default function PromocionesScreen({
 }) {
   const [promociones, setPromociones] = useState([]);
   const [servicios, setServicios] = useState([]);
+  const [serviciosPromociones, setServiciosPromociones] = useState([]);
+  const [cargandoServicios, setCargandoServicios] = useState(false);
 
   const [cargando, setCargando] = useState(true);
   const [actualizando, setActualizando] =
     useState(false);
   const [error, setError] = useState('');
 
-  const [busquedaPromociones, setBusquedaPromociones] =
+  const [busquedaPromociones, setBusquedaPromocionesBase] =
     useState('');
   const [estadoSeleccionado, setEstadoSeleccionado] =
     useState('TODAS');
@@ -154,6 +159,10 @@ export default function PromocionesScreen({
 
   const [alturaTeclado, setAlturaTeclado] = useState(0);
 
+  const paginacion = usePagination(estadoSeleccionado);
+  const setBusquedaPromociones = valor => { setBusquedaPromocionesBase(valor); paginacion.setPagina(0); };
+  const serviciosPagina = usePagination(String(mostrarCreacion));
+  const planesPagina = usePagination(textoPlan.trim());
   const solicitudBusquedaRef = useRef(0);
 
   useEffect(() => {
@@ -183,53 +192,30 @@ export default function PromocionesScreen({
     };
   }, []);
 
-  const cargarDatos = useCallback(
-  async (mostrarCarga = true) => {
+  const cargarDatos = useCallback(async (mostrarCarga = true) => {
+    const solicitudPagina = paginacion.iniciarSolicitud();
     if (mostrarCarga) {
       setCargando(true);
     }
-
     setError('');
-
     try {
-      const [
-        promocionesRespuesta,
-        serviciosRespuesta,
-      ] = await Promise.all([
-        promocionService.obtenerMisPromociones(),
-        servicioService.listarMisServicios(),
-      ]);
-
-      setPromociones(
-        Array.isArray(promocionesRespuesta)
-          ? promocionesRespuesta
-          : []
-      );
-
-      const listaServicios =
-        Array.isArray(serviciosRespuesta)
-          ? serviciosRespuesta
-          : Array.isArray(serviciosRespuesta?.servicios)
-            ? serviciosRespuesta.servicios
-            : Array.isArray(serviciosRespuesta?.content)
-              ? serviciosRespuesta.content
-              : [];
-
-      setServicios(listaServicios);
+      const promocionesRespuesta = await listadosPaginados.promociones(paginacion.pagina, estadoSeleccionado);
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const lista = paginacion.registrar(promocionesRespuesta);
+      const detalles = await Promise.all([...new Set(lista.map(p => p.servicioId))].filter(Boolean).map(id => servicioService.obtenerPorId(id).catch(() => null)));
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setPromociones(lista);
+      setServiciosPromociones(detalles.filter(Boolean));
     } catch (err) {
-      setError(
-        obtenerMensajeError(
-          err,
-          'No se pudieron cargar las promociones.'
-        )
-      );
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setError(obtenerMensajeError(err, 'No se pudieron cargar las promociones.'));
     } finally {
-      setCargando(false);
-      setActualizando(false);
+      if (paginacion.esActual(solicitudPagina)) {
+        setCargando(false);
+        setActualizando(false);
+      }
     }
-  },
-  []
-);
+  }, [paginacion.pagina, estadoSeleccionado]);
 
   useFocusEffect(
     useCallback(() => {
@@ -240,6 +226,18 @@ export default function PromocionesScreen({
       };
     }, [cargarDatos])
   );
+
+  useEffect(() => {
+    if (!mostrarCreacion) return;
+    let activo = true;
+    setCargandoServicios(true);
+    listadosPaginados.misServicios(serviciosPagina.pagina).then(respuesta => {
+      if (activo) setServicios(serviciosPagina.registrar(respuesta));
+    }).catch(error => {
+      if (activo) Alert.alert('No se pudieron cargar los servicios', obtenerMensajeError(error));
+    }).finally(() => { if (activo) setCargandoServicios(false); });
+    return () => { activo = false; };
+  }, [mostrarCreacion, serviciosPagina.pagina]);
 
   useEffect(() => {
     if (!mostrarCreacion) {
@@ -259,7 +257,7 @@ export default function PromocionesScreen({
 
       planPromocionService
         .obtenerActivos(
-          0,
+          planesPagina.pagina,
           10,
           {
             signal: controller.signal,
@@ -270,7 +268,7 @@ export default function PromocionesScreen({
             numeroSolicitud ===
             solicitudBusquedaRef.current
           ) {
-            setPlanes(respuesta.planes ?? []);
+            setPlanes(planesPagina.registrar({ ...respuesta.pagina, contenido: respuesta.planes }));
           }
         })
         .catch((err) => {
@@ -324,7 +322,7 @@ export default function PromocionesScreen({
         const respuesta =
           await planPromocionService.buscar(
             texto,
-            0,
+            planesPagina.pagina,
             10,
             {
               signal: controller.signal,
@@ -335,7 +333,7 @@ export default function PromocionesScreen({
           numeroSolicitud ===
           solicitudBusquedaRef.current
         ) {
-          setPlanes(respuesta.planes ?? []);
+          setPlanes(planesPagina.registrar({ ...respuesta.pagina, contenido: respuesta.planes }));
         }
       } catch (err) {
         if (
@@ -366,7 +364,7 @@ export default function PromocionesScreen({
       clearTimeout(temporizador);
       controller.abort();
     };
-  }, [textoPlan, mostrarCreacion]);
+  }, [planesPagina.pagina, textoPlan, mostrarCreacion]);
 
   useEffect(() => {
     if (
@@ -568,7 +566,7 @@ export default function PromocionesScreen({
   promocion.servicioId?.toString(),
   obtenerTituloServicio(
     promocion.servicioId,
-    servicios
+    serviciosPromociones
   ),
 ].some((valor) =>
   valor
@@ -698,12 +696,12 @@ export default function PromocionesScreen({
                 />
 
                 <Text style={styles.avisoTexto}>
-                  No tienes servicios disponibles para
-                  seleccionar.
+                  {cargandoServicios ? 'Cargando servicios...' : 'No tienes servicios disponibles para seleccionar.'}
                 </Text>
               </View>
             ) : (
-              <ScrollView
+              <>
+<ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={
@@ -758,7 +756,10 @@ export default function PromocionesScreen({
                     </Pressable>
                   );
                 })}
+
               </ScrollView>
+{!cargando && !error ? <PaginationControls {...serviciosPagina.props} loading={cargandoServicios} /> : null}
+</>
             )}
 
             <Text style={styles.etiqueta}>
@@ -864,6 +865,7 @@ export default function PromocionesScreen({
                     </Text>
                   </Pressable>
                 ))}
+        {!cargando && !error ? <PaginationControls {...planesPagina.props} loading={buscandoPlanes} /> : null}
               </View>
             ) : null}
 
@@ -1041,7 +1043,7 @@ export default function PromocionesScreen({
             style={styles.inputBuscador}
             value={busquedaPromociones}
             onChangeText={setBusquedaPromociones}
-            placeholder="Buscar promociones..."
+            placeholder="Buscar en esta página..."
             placeholderTextColor="#98A2B3"
           />
 
@@ -1123,7 +1125,7 @@ export default function PromocionesScreen({
           </Text>
 
           <Text style={styles.contador}>
-            {promocionesFiltradas.length}
+            {paginacion.props.totalItems}
           </Text>
         </View>
 
@@ -1182,7 +1184,7 @@ export default function PromocionesScreen({
       servicioTitulo:
         obtenerTituloServicio(
           promocion.servicioId,
-          servicios
+          serviciosPromociones
         ),
     }
   )
@@ -1210,7 +1212,7 @@ export default function PromocionesScreen({
 >
   {obtenerTituloServicio(
     promocion.servicioId,
-    servicios
+    serviciosPromociones
   )}
 </Text>
                   </View>
@@ -1305,6 +1307,7 @@ export default function PromocionesScreen({
             );
           })
         )}
+        {!cargando && !error ? <PaginationControls {...paginacion.props} notice={busquedaPromociones.trim() ? 'La búsqueda se aplica a los registros de esta página.' : null} loading={cargando} /> : null}
       </ScrollView>
     </SafeAreaView>
   );

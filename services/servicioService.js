@@ -156,7 +156,7 @@ export const servicioService = {
     tarifaMinima = null,
     tarifaMaxima = null,
     page = 0,
-    size = 20,
+    size = 10,
   } = {}) => {
     const params = limpiarParametros({
       texto,
@@ -187,7 +187,7 @@ export const servicioService = {
   listarPorTrabajador: async (
     perfilTrabajadorId,
     page = 0,
-    size = 20
+    size = 10
   ) => {
     if (!perfilTrabajadorId) {
       throw new Error(
@@ -211,7 +211,7 @@ export const servicioService = {
   listarContenidoPorTrabajador: async (
     perfilTrabajadorId,
     page = 0,
-    size = 20
+    size = 10
   ) =>
     obtenerContenidoPagina(
       await servicioService.listarPorTrabajador(
@@ -223,7 +223,7 @@ export const servicioService = {
 
   listarMisServicios: async (
     page = 0,
-    size = 100
+    size = 10
   ) => {
     const perfilTrabajadorId =
       await servicioService.obtenerMiPerfilTrabajadorId();
@@ -240,7 +240,7 @@ export const servicioService = {
   listarPorCategoria: async (
     categoriaId,
     page = 0,
-    size = 20
+    size = 10
   ) => {
     if (!categoriaId) {
       throw new Error(
@@ -264,7 +264,7 @@ export const servicioService = {
   buscarPorZona: async (
     zonaId,
     page = 0,
-    size = 20
+    size = 10
   ) => {
     const id = Number(zonaId);
 

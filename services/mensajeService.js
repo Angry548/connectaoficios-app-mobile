@@ -1,6 +1,6 @@
 import apiJava from './apiJava';
 
-const TAMANIO_PAGINA = 20;
+const TAMANIO_PAGINA = 10;
 const MAXIMO_CARACTERES = 2000;
 
 const normalizarMensaje = (mensaje) => {
@@ -333,6 +333,11 @@ const contarNoLeidos = async (
 };
 
 export const mensajeService = {
+  obtenerTotalMensajesNoLeidos: async () => {
+    const response = await apiJava.get('/api/mensajes/no-leidos/total');
+    const total = Number(response.data?.total ?? 0);
+    return Number.isSafeInteger(total) && total >= 0 ? total : 0;
+  },
   TAMANIO_PAGINA,
   MAXIMO_CARACTERES,
   enviarMensaje,

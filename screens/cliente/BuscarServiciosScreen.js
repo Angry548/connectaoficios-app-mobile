@@ -1,3 +1,7 @@
+import { listadosPaginados } from '../../services/listadosPaginados';
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useEffect,
@@ -135,6 +139,7 @@ export default function BuscarServiciosScreen({
     useState(false);
   const [error, setError] = useState('');
 
+  const paginacion = usePagination(JSON.stringify([texto, categoriaId, zonaSeleccionada?.id, diaSemana, tarifaMinima, tarifaMaxima]));
   const obtenerContenidoPagina = (data) => {
     if (Array.isArray(data)) return data;
     if (Array.isArray(data?.contenido)) {
@@ -150,32 +155,23 @@ export default function BuscarServiciosScreen({
     return [];
   };
 
-  const obtenerMensajeError = (err) => {
-    const data = err?.response?.data;
+  const obtenerMensajeError = (error, fallback = "No se pudieron cargar los servicios.") => mensajeError(error, fallback);
 
-    return (
-      data?.message ||
-      data?.mensaje ||
-      err?.message ||
-      'No se pudieron cargar los servicios.'
-    );
-  };
-
+  const zonasPagina = usePagination(textoZonaTemporal.trim());
+  const categoriasPagina = usePagination();
   const cargarCategorias = useCallback(async () => {
+    const solicitud = categoriasPagina.iniciarSolicitud();
     try {
-      const data =
-        await servicioService.listarCategorias();
-
-      setCategorias(
-        Array.isArray(data) ? data : []
-      );
+      const data = await listadosPaginados.categorias(categoriasPagina.pagina);
+      if (!categoriasPagina.esActual(solicitud)) return;
+      setCategorias(categoriasPagina.registrar(data));
     } catch {
       setCategorias([]);
     }
-  }, []);
+  }, [categoriasPagina.pagina]);
 
   const cargarTrabajadores = useCallback(
-    async (serviciosObtenidos) => {
+    async (serviciosObtenidos, solicitudPagina) => {
       const perfilesIds = [
         ...new Set(
           serviciosObtenidos
@@ -233,61 +229,46 @@ export default function BuscarServiciosScreen({
         })
       );
 
-      setTrabajadores(resultado);
+      if (paginacion.esActual(solicitudPagina)) setTrabajadores(resultado);
     },
     []
   );
 
-  const cargarServicios = useCallback(
-    async (mostrarCarga = true) => {
-      if (mostrarCarga) {
-        setCargando(true);
-      }
-
-      setError('');
-
-      try {
-        const data =
-          await servicioService.listar({
-            texto: texto.trim() || null,
-            categoriaId,
-            zonaId:
-              zonaSeleccionada?.id ?? null,
-            diaSemana,
-            estado: 'ACTIVO',
-            tarifaMinima,
-            tarifaMaxima,
-            page: 0,
-            size: 50,
-          });
-
-        const serviciosObtenidos =
-          obtenerContenidoPagina(data);
-
-        setServicios(serviciosObtenidos);
-
-        await cargarTrabajadores(
-          serviciosObtenidos
-        );
-      } catch (err) {
-        setServicios([]);
-        setTrabajadores({});
-        setError(obtenerMensajeError(err));
-      } finally {
+  const cargarServicios = useCallback(async (mostrarCarga = true) => {
+    const solicitudPagina = paginacion.iniciarSolicitud();
+    if (mostrarCarga) {
+      setCargando(true);
+    }
+    setError('');
+    try {
+      const data = await servicioService.listar({
+        texto: texto.trim() || null,
+        categoriaId,
+        zonaId: zonaSeleccionada?.id ?? null,
+        diaSemana,
+        estado: 'ACTIVO',
+        tarifaMinima,
+        tarifaMaxima,
+        page: paginacion.pagina,
+        size: 10
+      });
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const serviciosObtenidos = paginacion.registrar(data);
+      setServicios(serviciosObtenidos);
+      await cargarTrabajadores(serviciosObtenidos, solicitudPagina);
+      if (!paginacion.esActual(solicitudPagina)) return;
+    } catch (err) {
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setServicios([]);
+      setTrabajadores({});
+      setError(obtenerMensajeError(err));
+    } finally {
+      if (paginacion.esActual(solicitudPagina)) {
         setCargando(false);
         setActualizando(false);
       }
-    },
-    [
-      texto,
-      categoriaId,
-      zonaSeleccionada,
-      diaSemana,
-      tarifaMinima,
-      tarifaMaxima,
-      cargarTrabajadores,
-    ]
-  );
+    }
+  }, [paginacion.pagina, texto, categoriaId, zonaSeleccionada, diaSemana, tarifaMinima, tarifaMaxima, cargarTrabajadores]);
 
   useEffect(() => {
     cargarCategorias();
@@ -333,13 +314,10 @@ export default function BuscarServiciosScreen({
 
         try {
           const zonas =
-            await zonaCoberturaService.buscar(
-              textoLimpio,
-              10
-            );
+            await listadosPaginados.zonas(zonasPagina.pagina, textoLimpio);
 
           if (activo) {
-            setSugerenciasZona(zonas);
+            setSugerenciasZona(zonasPagina.registrar(zonas));
           }
         } catch {
           if (activo) {
@@ -358,7 +336,7 @@ export default function BuscarServiciosScreen({
       activo = false;
       clearTimeout(temporizador);
     };
-  }, [
+  }, [zonasPagina.pagina,
     textoZonaTemporal,
     zonaTemporalSeleccionada,
     modalFiltrosVisible,
@@ -867,7 +845,7 @@ export default function BuscarServiciosScreen({
             </Text>
           </View>
 
-        
+
         </View>
 
         {filtrosActivos.length > 0 ? (
@@ -1242,6 +1220,7 @@ export default function BuscarServiciosScreen({
             );
           })
         )}
+        {!cargando && !error ? <PaginationControls {...paginacion.props} loading={cargando} /> : null}
       </ScrollView>
 
       <Modal
@@ -1341,7 +1320,8 @@ export default function BuscarServiciosScreen({
                 </View>
               </View>
 
-              <ScrollView
+              <>
+<ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={
                   false
@@ -1415,7 +1395,10 @@ export default function BuscarServiciosScreen({
                     );
                   }
                 )}
+
               </ScrollView>
+{!cargando && !error ? <PaginationControls {...categoriasPagina.props} loading={cargando} /> : null}
+</>
 
               <View
                 style={styles.separador}
@@ -1645,6 +1628,7 @@ export default function BuscarServiciosScreen({
                       );
                     }
                   )}
+{!buscandoZonas && !zonaTemporalSeleccionada && textoZonaTemporal.trim().length >= 2 ? <PaginationControls {...zonasPagina.props} loading={buscandoZonas} /> : null}
                 </View>
               ) : null}
 

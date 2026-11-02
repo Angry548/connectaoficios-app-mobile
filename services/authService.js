@@ -168,7 +168,11 @@ export const authService = {
     }
 
     try {
-      return construirUsuarioDesdeToken(token);
+      const usuario = construirUsuarioDesdeToken(token);
+      const confirmada = await secureStorage.obtenerIdentidadConfirmada();
+      return confirmada && String(confirmada.id) === usuario.id
+        ? { ...usuario, nombre: confirmada.nombre, correo: confirmada.correo }
+        : usuario;
     } catch {
       await secureStorage.eliminarToken();
       return null;

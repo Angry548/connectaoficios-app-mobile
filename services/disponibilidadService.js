@@ -137,7 +137,7 @@ export const disponibilidadService = {
     horaDesde = null,
     horaHasta = null,
     page = 0,
-    size = 20,
+    size = 10,
   } = {}) => {
     const params = {
       page,

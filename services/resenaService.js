@@ -1,6 +1,6 @@
 import apiJava from './apiJava';
 
-const TAMANIO_PAGINA = 20;
+const TAMANIO_PAGINA = 10;
 
 const normalizarResena = (resena) => {
   if (!resena) {

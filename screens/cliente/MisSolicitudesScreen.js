@@ -1,3 +1,7 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { useFocusEffect } from '@react-navigation/native';
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useEffect,
@@ -97,68 +101,43 @@ const formatearHora = (valor) => {
   return String(valor).substring(0, 5);
 };
 
-const obtenerMensajeError = (error) => {
-  return (
-    error?.response?.data?.message ||
-    error?.response?.data?.mensaje ||
-    error?.response?.data?.title ||
-    error?.message ||
-    'No se pudieron cargar tus solicitudes.'
-  );
-};
+const obtenerMensajeError = (error, fallback = "No se pudieron cargar tus solicitudes.") => mensajeError(error, fallback);
 
 export default function MisSolicitudesScreen({
   navigation,
 }) {
+  const paginacion = usePagination();
   const [solicitudes, setSolicitudes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [actualizando, setActualizando] =
     useState(false);
   const [error, setError] = useState(null);
 
-  const cargarSolicitudes = useCallback(
-    async (mostrarCarga = true) => {
-      if (mostrarCarga) {
-        setCargando(true);
-      }
-
-      try {
-        setError(null);
-
-        const resultado =
-          await solicitudService.obtenerSolicitudesClientePaginadas(
-            0,
-            50
-          );
-
-        const contenido = Array.isArray(
-          resultado?.contenido
-        )
-          ? resultado.contenido
-          : [];
-
-        setSolicitudes(contenido);
-      } catch (err) {
-        setSolicitudes([]);
-        setError(obtenerMensajeError(err));
-      } finally {
+  const cargarSolicitudes = useCallback(async (mostrarCarga = true) => {
+    const solicitudPagina = paginacion.iniciarSolicitud();
+    if (mostrarCarga) {
+      setCargando(true);
+    }
+    try {
+      setError(null);
+      const resultado = await solicitudService.obtenerSolicitudesClientePaginadas(paginacion.pagina, 10);
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const contenido = Array.isArray(resultado?.contenido) ? resultado.contenido : [];
+      paginacion.registrar(resultado);
+      setSolicitudes(contenido);
+    } catch (err) {
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setSolicitudes([]);
+      setError(obtenerMensajeError(err));
+    } finally {
+      if (paginacion.esActual(solicitudPagina)) {
         setCargando(false);
         setActualizando(false);
       }
-    },
-    []
-  );
+    }
+  }, [paginacion.pagina]);
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener(
-      'focus',
-      () => {
-        cargarSolicitudes();
-      }
-    );
-
-    return unsubscribe;
-  }, [navigation, cargarSolicitudes]);
+  useFocusEffect(useCallback(() => { cargarSolicitudes(); }, [cargarSolicitudes]));
 
   const actualizar = async () => {
     setActualizando(true);
@@ -224,7 +203,7 @@ export default function MisSolicitudesScreen({
               <Text
                 style={styles.contadorSolicitudesTexto}
               >
-                {solicitudes.length}
+                {paginacion.props.totalItems}
               </Text>
             </View>
           ) : null}
@@ -455,6 +434,7 @@ export default function MisSolicitudesScreen({
             );
           })
         )}
+        {!cargando && !error ? <PaginationControls {...paginacion.props} loading={cargando} /> : null}
       </ScrollView>
     </SafeAreaView>
   );

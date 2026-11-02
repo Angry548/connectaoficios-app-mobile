@@ -1,3 +1,6 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useState,
@@ -155,6 +158,7 @@ export default function RankingTrabajadoresScreen({
   const [error, setError] =
     useState('');
 
+  const paginacion = useLocalPagination(trabajadores);
   const cargarRanking = useCallback(
     async (esActualizacion = false) => {
       if (esActualizacion) {
@@ -235,10 +239,7 @@ export default function RankingTrabajadoresScreen({
         setTrabajadores([]);
 
         setError(
-          errorCarga?.response?.data?.message ||
-            errorCarga?.response?.data?.mensaje ||
-            errorCarga?.message ||
-            'No se pudo cargar el ranking de trabajadores.'
+          mensajeError(errorCarga, 'No se pudo cargar la información. Intenta nuevamente.')
         );
       } finally {
         setCargando(false);
@@ -276,7 +277,7 @@ export default function RankingTrabajadoresScreen({
   ) => {
     const posicion =
       trabajador.posicionRanking ??
-      indice + 1;
+      paginacion.pagina * 10 + indice + 1;
 
     const estiloPosicion =
       obtenerEstiloPosicion(posicion);
@@ -723,9 +724,10 @@ export default function RankingTrabajadoresScreen({
                 </Text>
               </View>
 
-              {trabajadores.map(
+              {paginacion.items.map(
                 renderTrabajador
               )}
+        {!cargando && !error ? <PaginationControls {...paginacion.props} loading={cargando} /> : null}
             </>
           )}
         </ScrollView>

@@ -1,3 +1,6 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useMemo,
@@ -33,32 +36,7 @@ import {
   userService,
 } from '../../services/userService';
 
-const obtenerMensajeError = (error) => {
-  const data = error?.response?.data;
-
-  if (
-    data?.errors &&
-    typeof data.errors === 'object'
-  ) {
-    const mensajes = Object.values(
-      data.errors
-    )
-      .flat()
-      .filter(Boolean);
-
-    if (mensajes.length > 0) {
-      return mensajes.join('\n');
-    }
-  }
-
-  return (
-    data?.message ||
-    data?.mensaje ||
-    data?.title ||
-    error?.message ||
-    'Ocurrió un problema al cargar la información.'
-  );
-};
+const obtenerMensajeError = (error, fallback = "Ocurrió un problema al cargar la información.") => mensajeError(error, fallback);
 
 const obtenerNombreInsignia = (insignia) => {
   switch (insignia) {
@@ -223,6 +201,8 @@ export default function ReputacionScreen({
   const [error, setError] =
     useState('');
 
+  const rankingPagina = useLocalPagination(ranking);
+  const resenasPagina = usePagination();
   const cargarUsuarioSeguro =
     useCallback(async (usuarioId) => {
       const id = Number(usuarioId);
@@ -382,141 +362,81 @@ export default function ReputacionScreen({
       [cargarUsuarioSeguro]
     );
 
-  const cargarDatos = useCallback(
-    async (
-      mostrarCarga = true,
-      signal
-    ) => {
-      if (mostrarCarga) {
-        setCargando(true);
+  const cargarDatos = useCallback(async (mostrarCarga = true, signal) => {
+    const solicitudPagina = resenasPagina.iniciarSolicitud();
+    if (mostrarCarga) {
+      setCargando(true);
+    }
+    setError('');
+    try {
+      const miPerfil = await perfilTrabajadorService.obtenerMiPerfil({
+        signal
+      });
+      if (!resenasPagina.esActual(solicitudPagina)) return;
+      if (signal?.aborted) {
+        return;
       }
-
-      setError('');
-
+      setPerfil(miPerfil);
+      let miReputacion;
       try {
-        const miPerfil =
-          await perfilTrabajadorService
-            .obtenerMiPerfil({
-              signal,
-            });
-
-        if (signal?.aborted) {
+        miReputacion = await reputacionService.obtenerPorPerfilTrabajador(miPerfil.id, {
+          signal
+        });
+        if (!resenasPagina.esActual(solicitudPagina)) return;
+      } catch (errorReputacion) {
+        if (!resenasPagina.esActual(solicitudPagina)) return;
+        if (errorReputacion?.name === 'CanceledError' || errorReputacion?.code === 'ERR_CANCELED' || signal?.aborted) {
           return;
         }
-
-        setPerfil(miPerfil);
-
-        let miReputacion;
-
-        try {
-          miReputacion =
-            await reputacionService
-              .obtenerPorPerfilTrabajador(
-                miPerfil.id,
-                {
-                  signal,
-                }
-              );
-        } catch (errorReputacion) {
-          if (
-            errorReputacion?.name ===
-              'CanceledError' ||
-            errorReputacion?.code ===
-              'ERR_CANCELED' ||
-            signal?.aborted
-          ) {
-            return;
-          }
-
-          if (
-            errorReputacion?.response
-              ?.status === 404
-          ) {
-            miReputacion =
-              await reputacionService
-                .crearReputacion(
-                  miPerfil.id,
-                  {
-                    signal,
-                  }
-                );
-          } else {
-            throw errorReputacion;
-          }
-        }
-
-        if (signal?.aborted) {
-          return;
-        }
-
-        setReputacion(miReputacion);
-
-        const [
-          rankingObtenido,
-          resenasObtenidas,
-        ] = await Promise.all([
-          reputacionService.obtenerRanking({
-            signal,
-          }),
-          resenaService.obtenerPorTrabajador(
-            miPerfil.id,
-            {
-              signal,
-            }
-          ),
-        ]);
-
-        if (signal?.aborted) {
-          return;
-        }
-
-        const [
-          rankingCompleto,
-          resenasCompletas,
-        ] = await Promise.all([
-          enriquecerRanking(
-            rankingObtenido,
+        if (errorReputacion?.response?.status === 404) {
+          miReputacion = await reputacionService.crearReputacion(miPerfil.id, {
             signal
-          ),
-          enriquecerResenas(
-            resenasObtenidas
-          ),
-        ]);
-
-        if (signal?.aborted) {
-          return;
+          });
+          if (!resenasPagina.esActual(solicitudPagina)) return;
+        } else {
+          throw errorReputacion;
         }
-
-        setRanking(rankingCompleto);
-        setResenas(resenasCompletas);
-      } catch (err) {
-        if (
-          err?.name === 'CanceledError' ||
-          err?.code === 'ERR_CANCELED' ||
-          signal?.aborted
-        ) {
-          return;
-        }
-
-        setError(
-          obtenerMensajeError(err)
-        );
-
-        setReputacion(null);
-        setRanking([]);
-        setResenas([]);
-      } finally {
+      }
+      if (signal?.aborted) {
+        return;
+      }
+      setReputacion(miReputacion);
+      const [rankingObtenido, resenasObtenidas] = await Promise.all([reputacionService.obtenerRanking({
+        signal
+      }), resenaService.buscarConFiltros({
+        perfilTrabajadorId: miPerfil.id
+      }, resenasPagina.pagina, 10, {
+        signal
+      })]);
+      if (!resenasPagina.esActual(solicitudPagina)) return;
+      if (signal?.aborted) {
+        return;
+      }
+      const [rankingCompleto, resenasCompletas] = await Promise.all([enriquecerRanking(rankingObtenido, signal), enriquecerResenas(resenasPagina.registrar(resenasObtenidas))]);
+      if (!resenasPagina.esActual(solicitudPagina)) return;
+      if (signal?.aborted) {
+        return;
+      }
+      setRanking(rankingCompleto);
+      setResenas(resenasCompletas);
+    } catch (err) {
+      if (!resenasPagina.esActual(solicitudPagina)) return;
+      if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED' || signal?.aborted) {
+        return;
+      }
+      setError(obtenerMensajeError(err));
+      setReputacion(null);
+      setRanking([]);
+      setResenas([]);
+    } finally {
+      if (resenasPagina.esActual(solicitudPagina)) {
         if (!signal?.aborted) {
           setCargando(false);
           setActualizando(false);
         }
       }
-    },
-    [
-      enriquecerRanking,
-      enriquecerResenas,
-    ]
-  );
+    }
+  }, [resenasPagina.pagina, enriquecerRanking, enriquecerResenas]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1156,7 +1076,7 @@ export default function ReputacionScreen({
                 </Text>
               </View>
             ) : (
-              ranking.map(
+              rankingPagina.items.map(
                 (
                   trabajador,
                   indice
@@ -1171,7 +1091,7 @@ export default function ReputacionScreen({
                   const posicion =
                     trabajador
                       .posicionRanking ??
-                    indice + 1;
+                    rankingPagina.pagina * 10 + indice + 1;
 
                   const colorInsignia =
                     obtenerColorInsignia(
@@ -1394,6 +1314,7 @@ export default function ReputacionScreen({
                 }
               )
             )}
+        {!cargando && !error ? <PaginationControls {...rankingPagina.props} loading={cargando} /> : null}
 
             <View
               style={
@@ -1428,7 +1349,7 @@ export default function ReputacionScreen({
                     styles.rankingCantidadTexto
                   }
                 >
-                  {resenas.length}
+                  {resenasPagina.props.totalItems}
                 </Text>
               </View>
             </View>
@@ -1588,6 +1509,7 @@ export default function ReputacionScreen({
                 )
               )
             )}
+        {!cargando && !error ? <PaginationControls {...resenasPagina.props} loading={cargando} /> : null}
           </>
         )}
       </ScrollView>

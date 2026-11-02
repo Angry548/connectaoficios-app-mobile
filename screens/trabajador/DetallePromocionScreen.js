@@ -1,3 +1,6 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { listadosPaginados } from '../../services/listadosPaginados';
 import React, {
   useCallback,
   useState,
@@ -125,68 +128,47 @@ export default function DetallePromocionScreen({
     useState(false);
   const [error, setError] = useState('');
 
-  const cargarDetalle = useCallback(
-    async (mostrarCarga = true) => {
-      if (!promocionId) {
-        setError(
-          'No se recibió el identificador de la promoción.'
-        );
-        setCargando(false);
-        setActualizando(false);
-        return;
-      }
-
-      if (mostrarCarga) {
-        setCargando(true);
-      }
-
-      setError('');
-
-      try {
-        const promocionRespuesta =
-          await promocionService.obtenerPorId(
-            promocionId
-          );
-
-        setPromocion(promocionRespuesta);
-
-        const [
-          planRespuesta,
-          transaccionesRespuesta,
-          vigenteRespuesta,
-        ] = await Promise.all([
-          planPromocionService.obtenerPorId(
-            promocionRespuesta.planId
-          ),
-          transaccionPagoService.obtenerPorPromocion(
-            promocionId
-          ),
-          promocionService.estaVigente(
-            promocionId
-          ),
-        ]);
-
-        setPlan(planRespuesta);
-        setTransacciones(
-          Array.isArray(transaccionesRespuesta)
-            ? transaccionesRespuesta
-            : []
-        );
-        setVigente(Boolean(vigenteRespuesta));
-      } catch (err) {
-        setError(
-          obtenerMensajeError(
-            err,
-            'No se pudo cargar el detalle de la promoción.'
-          )
-        );
-      } finally {
+  const paginacion = usePagination(String(promocionId));
+  const [pendiente, setPendiente] = useState(null);
+  const cargarDetalle = useCallback(async (mostrarCarga = true) => {
+    const solicitudPagina = paginacion.iniciarSolicitud();
+    if (!promocionId) {
+      setError('No se recibió el identificador de la promoción.');
+      setCargando(false);
+      setActualizando(false);
+      return;
+    }
+    if (mostrarCarga) {
+      setCargando(true);
+    }
+    setError('');
+    try {
+      const promocionRespuesta = await promocionService.obtenerPorId(promocionId);
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setPromocion(promocionRespuesta);
+      const [planRespuesta, transaccionesRespuesta, vigenteRespuesta] = await Promise.all([planPromocionService.obtenerPorId(promocionRespuesta.planId), listadosPaginados.transacciones(paginacion.pagina, {
+        promocionId
+      }), promocionService.estaVigente(promocionId)]);
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setPlan(planRespuesta);
+      setTransacciones(paginacion.registrar(transaccionesRespuesta));
+      setVigente(Boolean(vigenteRespuesta));
+      const pendientes = await listadosPaginados.transacciones(0, {
+        promocionId,
+        estado: 'PENDIENTE'
+      });
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setPendiente(pendientes.contenido?.[0] ?? pendientes.content?.[0] ?? null);
+    } catch (err) {
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setError(obtenerMensajeError(err, 'No se pudo cargar el detalle de la promoción.'));
+    } finally {
+      if (paginacion.esActual(solicitudPagina)) {
         setCargando(false);
         setActualizando(false);
       }
-    },
-    [promocionId]
-  );
+    }
+  }, [paginacion.pagina, promocionId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -199,9 +181,7 @@ export default function DetallePromocionScreen({
     await cargarDetalle(false);
   };
 
-  const transaccionPendiente = transacciones.find(
-    (item) => item.estado === 'PENDIENTE'
-  );
+  const transaccionPendiente = pendiente;
 
   const irAPago = () => {
     if (!promocion || !plan) {
@@ -576,7 +556,7 @@ export default function DetallePromocionScreen({
               </Text>
 
               <Text style={styles.contador}>
-                {transacciones.length}
+                {paginacion.props.totalItems}
               </Text>
             </View>
 
@@ -726,6 +706,7 @@ export default function DetallePromocionScreen({
                 );
               })
             )}
+        {!cargando && !error ? <PaginationControls {...paginacion.props} loading={cargando} /> : null}
 
             {promocion.estado === 'PENDIENTE' ? (
               <Pressable

@@ -1,3 +1,6 @@
+import { listadosPaginados } from '../../services/listadosPaginados';
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
 import React, {
   useCallback,
   useEffect,
@@ -33,6 +36,8 @@ export default function ZonaCoberturaScreen({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
   const [errorBusqueda, setErrorBusqueda] = useState('');
+  const paginacion = useLocalPagination(zonasSeleccionadas, String(servicioId));
+  const resultadosPagina = usePagination(busqueda.trim());
   const solicitudRef = useRef(0);
 
   const cargarDatos = useCallback(async () => {
@@ -96,16 +101,13 @@ export default function ZonaCoberturaScreen({
 
       try {
         const data =
-          await zonaCoberturaService.buscar(
-            texto,
-            10
-          );
+          await listadosPaginados.zonas(resultadosPagina.pagina, texto);
 
         if (
           solicitudActual ===
           solicitudRef.current
         ) {
-          setResultados(data);
+          setResultados(resultadosPagina.registrar(data));
         }
       } catch (err) {
         if (
@@ -131,7 +133,7 @@ export default function ZonaCoberturaScreen({
     }, 350);
 
     return () => clearTimeout(temporizador);
-  }, [busqueda]);
+  }, [resultadosPagina.pagina, busqueda]);
 
   const estaSeleccionada = (id) =>
     seleccionadas.includes(Number(id));
@@ -343,7 +345,7 @@ export default function ZonaCoberturaScreen({
               Zonas seleccionadas
             </Text>
 
-            {zonasSeleccionadas.map((zona) => (
+            {paginacion.items.map((zona) => (
               <Pressable
                 key={zona.id}
                 style={[
@@ -383,6 +385,7 @@ export default function ZonaCoberturaScreen({
                 />
               </Pressable>
             ))}
+        {!cargando && !error ? <PaginationControls {...paginacion.props} loading={cargando} /> : null}
           </View>
         ) : null}
 
@@ -495,6 +498,7 @@ export default function ZonaCoberturaScreen({
               );
             })
           )}
+{!buscando && !errorBusqueda && busqueda.trim().length >= 2 ? <PaginationControls {...resultadosPagina.props} loading={buscando} /> : null}
         </View>
       </ScrollView>
 

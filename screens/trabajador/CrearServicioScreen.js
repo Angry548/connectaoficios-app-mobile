@@ -1,3 +1,6 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { listadosPaginados } from '../../services/listadosPaginados';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -29,6 +32,7 @@ export default function CrearServicioScreen({ navigation }) {
   const [tarifaMaxima, setTarifaMaxima] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [alturaTeclado, setAlturaTeclado] = useState(0);
+  const categoriasPagina = usePagination(busquedaCategoria.trim());
   const solicitudCategoriaRef = useRef(0);
 
   useEffect(() => {
@@ -77,16 +81,13 @@ export default function CrearServicioScreen({ navigation }) {
 
       try {
         const data =
-          await servicioService.buscarCategorias(
-            texto,
-            10
-          );
+          await listadosPaginados.categorias(categoriasPagina.pagina, texto);
 
         if (
           solicitudActual ===
           solicitudCategoriaRef.current
         ) {
-          setResultadosCategoria(data);
+          setResultadosCategoria(categoriasPagina.registrar(data));
         }
       } catch (error) {
         if (
@@ -112,7 +113,7 @@ export default function CrearServicioScreen({ navigation }) {
     }, 350);
 
     return () => clearTimeout(temporizador);
-  }, [busquedaCategoria, categoriaSeleccionada]);
+  }, [categoriasPagina.pagina, busquedaCategoria, categoriaSeleccionada]);
 
   const seleccionarCategoria = (categoria) => {
     setCategoriaId(Number(categoria.id));
@@ -516,6 +517,7 @@ export default function CrearServicioScreen({ navigation }) {
                   />
                 </Pressable>
               ))}
+{!buscandoCategoria && !errorCategoria && !categoriaSeleccionada && busquedaCategoria.trim().length >= 2 ? <PaginationControls {...categoriasPagina.props} loading={buscandoCategoria} /> : null}
             </View>
           ) : null}
         </View>

@@ -1,3 +1,4 @@
+import { prepararError } from './mensajesError';
 import axios from 'axios';
 import { API_CONFIG } from '../config/apiConfig';
 import { secureStorage } from '../storage/secureStorage';
@@ -22,7 +23,7 @@ apiJava.interceptors.request.use(
     return config;
   },
   (error) => {
-    return Promise.reject(error);
+    return Promise.reject(prepararError(error));
   }
 );
 

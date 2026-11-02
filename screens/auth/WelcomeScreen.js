@@ -1,3 +1,4 @@
+import BrandMark from '../../components/BrandMark';
 import React from 'react';
 import {
   View,
@@ -18,9 +19,7 @@ export default function WelcomeScreen({ navigation }) {
         <View style={styles.decoracionDos} />
 
         <View style={styles.marca}>
-          <View style={styles.logo}>
-            <Text style={styles.logoTexto}>CO</Text>
-          </View>
+          <BrandMark size={104} style={{ marginBottom: 18 }} />
 
           <Text style={styles.nombreAplicacion}>ConnectaOficios</Text>
 

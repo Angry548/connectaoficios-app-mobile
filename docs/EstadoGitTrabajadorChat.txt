@@ -1,0 +1,67 @@
+﻿ M app.json
+ M context/AuthContext.js
+ M navigation/ClienteNavigator.js
+ M navigation/TrabajadorNavigator.js
+ M package-lock.json
+ M package.json
+ M screens/auth/WelcomeScreen.js
+ M screens/cliente/BuscarServiciosScreen.js
+ M screens/cliente/CrearSolicitudScreen.js
+ M screens/cliente/DetalleServicioScreen.js
+ M screens/cliente/DetalleSolicitudClienteScreen.js
+ M screens/cliente/EditarPerfilClienteScreen.js
+ M screens/cliente/HomeClienteScreen.js
+ M screens/cliente/MisSolicitudesScreen.js
+ M screens/cliente/PerfilClienteScreen.js
+ M screens/cliente/PerfilPublicoTrabajadorScreen.js
+ M screens/cliente/RankingTrabajadoresScreen.js
+ M screens/cliente/ResenasTrabajadorScreen.js
+ M screens/shared/ChatScreen.js
+ M screens/shared/ConversacionesScreen.js
+ M screens/shared/NotificacionesScreen.js
+ M screens/trabajador/CrearServicioScreen.js
+ M screens/trabajador/DetallePromocionScreen.js
+ M screens/trabajador/DisponibilidadScreen.js
+ M screens/trabajador/EditarPerfilTrabajadorScreen.js
+ M screens/trabajador/EditarServicioScreen.js
+ M screens/trabajador/HistorialPagosScreen.js
+ M screens/trabajador/HomeTrabajadorScreen.js
+ M screens/trabajador/MiPerfilProfesionalScreen.js
+ M screens/trabajador/MisServiciosScreen.js
+ M screens/trabajador/PerfilTrabajadorScreen.js
+ M screens/trabajador/PromocionesScreen.js
+ M screens/trabajador/ReputacionScreen.js
+ M screens/trabajador/SolicitudesRecibidasScreen.js
+ M screens/trabajador/ZonaCoberturaScreen.js
+ M services/apiDotNet.js
+ M services/apiJava.js
+ M services/authService.js
+ M services/conversacionService.js
+ M services/disponibilidadService.js
+ M services/mensajeService.js
+ M services/perfilTrabajadorService.js
+ M services/planPromocionService.js
+ M services/reputacionService.js
+ M services/resenaService.js
+ M services/servicioService.js
+ M services/userService.js
+ M storage/secureStorage.js
+?? assets/brand/
+?? components/
+?? docs/
+?? hooks/
+?? navigation/createRoleTabs.js
+?? navigation/tabBarLayout.js
+?? screens/cliente/AjustesClienteScreen.js
+?? screens/shared/reportes/
+?? scripts/
+?? services/avatarConversacion.js
+?? services/guardarCambiosPerfil.js
+?? services/historialChat.js
+?? services/listadosPaginados.js
+?? services/mensajesError.js
+?? services/paginacion.js
+?? services/perfilClienteService.js
+?? services/reporteService.js
+?? services/seleccionImagenPerfil.js
+?? services/usuarioAutenticado.js

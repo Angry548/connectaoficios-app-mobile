@@ -1,10 +1,15 @@
+import { mensajeError } from '../../services/mensajesError';
+import AccountIdentityCard from '../../components/profile/AccountIdentityCard';
+import ProfileHeader from '../../components/profile/ProfileHeader';
+import UserAvatar from '../../components/UserAvatar';
+import { useAuth } from '../../context/AuthContext';
+import { perfilStyles } from '../../components/profile/profileStyles';
 import React, {
   useCallback,
   useState,
 } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -26,6 +31,7 @@ import {
 export default function MiPerfilProfesionalScreen({
   navigation,
 }) {
+  const { usuario } = useAuth();
   const [perfil, setPerfil] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [actualizando, setActualizando] =
@@ -51,10 +57,7 @@ export default function MiPerfilProfesionalScreen({
           setError('');
         } else {
           const mensaje =
-            err?.response?.data?.message ||
-            err?.response?.data?.mensaje ||
-            err?.message ||
-            'No se pudo cargar tu perfil profesional.';
+            mensajeError(err, "No se pudo cargar tu perfil profesional.");
 
           setError(mensaje);
         }
@@ -119,51 +122,9 @@ export default function MiPerfilProfesionalScreen({
 
   return (
     <SafeAreaView style={styles.contenedor}>
-      <View style={styles.encabezado}>
-        <View style={styles.encabezadoPrincipal}>
-          <Pressable
-            style={styles.botonVolver}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons
-              name="arrow-back"
-              size={23}
-              color="#101828"
-            />
-          </Pressable>
-
-          <View style={styles.encabezadoTexto}>
-            <Text style={styles.titulo}>
-              Perfil profesional
-            </Text>
-
-            <Text style={styles.subtitulo}>
-              Presenta tu experiencia y oficio
-            </Text>
-          </View>
-        </View>
-
-        {perfil ? (
-          <Pressable
-            style={styles.botonEditarSuperior}
-            onPress={() =>
-              navigation.navigate(
-                'EditarPerfilTrabajador',
-                {
-                  perfil,
-                  modoCreacion: false,
-                }
-              )
-            }
-          >
-            <Ionicons
-              name="create-outline"
-              size={22}
-              color="#FFFFFF"
-            />
-          </Pressable>
-        ) : null}
-      </View>
+      <ProfileHeader titulo="Perfil profesional" subtitulo="Presenta tu experiencia y oficio"
+        onBack={() => navigation.goBack()}
+        onEdit={perfil ? () => navigation.navigate('EditarPerfilTrabajador', { perfil, modoCreacion: false }) : undefined} />
 
       <ScrollView
         style={styles.scroll}
@@ -176,6 +137,7 @@ export default function MiPerfilProfesionalScreen({
           />
         }
       >
+        <AccountIdentityCard />
         {error ? (
           <View style={styles.errorContenedor}>
             <Ionicons
@@ -249,22 +211,7 @@ export default function MiPerfilProfesionalScreen({
           <>
             <View style={styles.tarjetaPrincipal}>
               <View style={styles.perfilSuperior}>
-                {perfil.fotoUrl ? (
-                  <Image
-                    source={{
-                      uri: perfil.fotoUrl,
-                    }}
-                    style={styles.foto}
-                  />
-                ) : (
-                  <View style={styles.fotoVacia}>
-                    <Ionicons
-                      name="person"
-                      size={38}
-                      color="#2563EB"
-                    />
-                  </View>
-                )}
+                <UserAvatar fotoUrl={perfil.fotoUrl} nombre={usuario?.nombre} size={72} style={styles.foto} />
 
                 <View style={styles.datosPrincipales}>
                   <Text style={styles.oficio}>
@@ -433,125 +380,7 @@ export default function MiPerfilProfesionalScreen({
 }
 
 const styles = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  encabezado: {
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EAECF0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  encabezadoPrincipal: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  botonVolver: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#F2F4F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 11,
-  },
-  encabezadoTexto: {
-    flex: 1,
-  },
-  titulo: {
-    fontSize: 23,
-    fontWeight: '700',
-    color: '#101828',
-  },
-  subtitulo: {
-    marginTop: 3,
-    fontSize: 12,
-    color: '#667085',
-  },
-  botonEditarSuperior: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: '#2563EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
-  },
-  scroll: {
-    flex: 1,
-  },
-  contenido: {
-    padding: 18,
-    paddingBottom: 40,
-    flexGrow: 1,
-  },
-  centro: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  textoCarga: {
-    marginTop: 12,
-    color: '#667085',
-  },
-  tarjetaPrincipal: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 17,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#EAECF0',
-  },
-  perfilSuperior: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  foto: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: '#F2F4F7',
-  },
-  fotoVacia: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  datosPrincipales: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  oficio: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#101828',
-  },
-  ubicacionFila: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 7,
-  },
-  ubicacionTexto: {
-    flex: 1,
-    marginLeft: 5,
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#667085',
-  },
-  separador: {
-    height: 1,
-    backgroundColor: '#EAECF0',
-    marginVertical: 16,
-  },
+  ...perfilStyles,
   completitudEncabezado: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -579,39 +408,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#2563EB',
   },
-  tarjeta: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 17,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#EAECF0',
-  },
-  seccionTituloFila: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconoSeccion: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 11,
-  },
-  seccionTitulo: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#101828',
-  },
-  textoContenido: {
-    marginTop: 14,
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#475467',
-  },
   zonaPrincipal: {
     marginTop: 14,
     fontSize: 16,
@@ -622,90 +418,5 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 13,
     color: '#667085',
-  },
-  botonEditar: {
-    minHeight: 50,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    borderRadius: 12,
-    backgroundColor: '#EFF6FF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  botonEditarTexto: {
-    marginLeft: 7,
-    color: '#2563EB',
-    fontWeight: '700',
-  },
-  vacio: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 60,
-  },
-  iconoVacio: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  vacioTitulo: {
-    marginTop: 18,
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#101828',
-  },
-  vacioTexto: {
-    marginTop: 8,
-    color: '#667085',
-    lineHeight: 20,
-    textAlign: 'center',
-  },
-  botonCrear: {
-    marginTop: 22,
-    minHeight: 50,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    backgroundColor: '#2563EB',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  botonCrearTexto: {
-    marginLeft: 7,
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  errorContenedor: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  errorTitulo: {
-    marginTop: 13,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#101828',
-  },
-  errorTexto: {
-    marginTop: 7,
-    color: '#667085',
-    textAlign: 'center',
-  },
-  botonReintentar: {
-    marginTop: 18,
-    backgroundColor: '#2563EB',
-    borderRadius: 10,
-    paddingHorizontal: 17,
-    paddingVertical: 11,
-  },
-  botonReintentarTexto: {
-    color: '#FFFFFF',
-    fontWeight: '700',
   },
 });

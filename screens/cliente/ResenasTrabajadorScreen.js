@@ -1,3 +1,6 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import reputacionService from '../../services/reputacionService';
 import React, {
   useCallback,
   useState,
@@ -34,53 +37,43 @@ const ResenasTrabajadorScreen = ({
   const perfilTrabajadorId =
     route?.params?.perfilTrabajadorId;
 
-  const cargarResenas = async (
-    mostrarCarga = true
-  ) => {
+  const paginacion = usePagination(String(perfilTrabajadorId));
+  const [resumen, setResumen] = useState(null);
+  const cargarResenas = async (mostrarCarga = true) => {
+    const solicitudPagina = paginacion.iniciarSolicitud();
     try {
       setError(null);
-
       if (mostrarCarga) {
         setCargando(true);
       } else {
         setActualizando(true);
       }
-
       if (!perfilTrabajadorId) {
-        throw new Error(
-          'No se recibió el identificador del perfil del trabajador.'
-        );
+        throw new Error('No se recibió el identificador del perfil del trabajador.');
       }
-
-      const data =
-        await resenaService.obtenerPorTrabajador(
-          perfilTrabajadorId
-        );
-
-      setResenas(
-        Array.isArray(data) ? data : []
-      );
+      const data = await resenaService.buscarConFiltros({
+        perfilTrabajadorId
+      }, paginacion.pagina, 10);
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setResenas(paginacion.registrar(data));
+      setResumen(await reputacionService.obtenerPorPerfilTrabajador(perfilTrabajadorId).catch(() => null));
+      if (!paginacion.esActual(solicitudPagina)) return;
     } catch (error) {
-      console.error(
-        'Error al cargar reseñas:',
-        error
-      );
-
-      setError(
-        error.response?.data?.message ||
-          error.message ||
-          'No se pudieron cargar las reseñas.'
-      );
+      if (!paginacion.esActual(solicitudPagina)) return;
+      console.error('Error al cargar reseñas:', error);
+      setError(error.response?.data?.message || error.message || 'No se pudieron cargar las reseñas.');
     } finally {
-      setCargando(false);
-      setActualizando(false);
+      if (paginacion.esActual(solicitudPagina)) {
+        setCargando(false);
+        setActualizando(false);
+      }
     }
   };
 
   useFocusEffect(
     useCallback(() => {
       cargarResenas();
-    }, [perfilTrabajadorId])
+    }, [perfilTrabajadorId, paginacion.pagina])
   );
 
   const renderEstrellas = (
@@ -132,24 +125,7 @@ const ResenasTrabajadorScreen = ({
     );
   };
 
-  const obtenerPromedio = () => {
-    if (resenas.length === 0) {
-      return '0.0';
-    }
-
-    const suma = resenas.reduce(
-      (total, resena) =>
-        total +
-        Number(
-          resena.calificacion || 0
-        ),
-      0
-    );
-
-    return (
-      suma / resenas.length
-    ).toFixed(1);
-  };
+  const obtenerPromedio = () => resumen ? Number(resumen.promedioCalificacion ?? 0).toFixed(1) : '—';
 
   if (cargando) {
     return (
@@ -312,8 +288,8 @@ const ResenasTrabajadorScreen = ({
                     styles.totalResenas
                   }
                 >
-                  {resenas.length}{' '}
-                  {resenas.length === 1
+                  {paginacion.props.totalItems}{' '}
+                  {paginacion.props.totalItems === 1
                     ? 'reseña'
                     : 'reseñas'}
                 </Text>
@@ -420,6 +396,7 @@ const ResenasTrabajadorScreen = ({
                     </View>
                   )
                 )}
+        {!cargando && !error ? <PaginationControls {...paginacion.props} loading={cargando} /> : null}
               </View>
             )}
           </>

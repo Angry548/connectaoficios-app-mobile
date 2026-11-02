@@ -1,116 +1,48 @@
-import React from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-
+import { createRoleTabs } from './createRoleTabs';
 import HomeClienteScreen from '../screens/cliente/HomeClienteScreen';
+import AjustesClienteScreen from '../screens/cliente/AjustesClienteScreen';
 import PerfilClienteScreen from '../screens/cliente/PerfilClienteScreen';
 import EditarPerfilClienteScreen from '../screens/cliente/EditarPerfilClienteScreen';
-
 import BuscarServiciosScreen from '../screens/cliente/BuscarServiciosScreen';
 import DetalleServicioScreen from '../screens/cliente/DetalleServicioScreen';
 import PerfilPublicoTrabajadorScreen from '../screens/cliente/PerfilPublicoTrabajadorScreen';
 import ResenasTrabajadorScreen from '../screens/cliente/ResenasTrabajadorScreen';
 import CrearResenaScreen from '../screens/cliente/CrearResenaScreen';
 import RankingTrabajadoresScreen from '../screens/cliente/RankingTrabajadoresScreen';
-
 import CrearSolicitudScreen from '../screens/cliente/CrearSolicitudScreen';
 import MisSolicitudesScreen from '../screens/cliente/MisSolicitudesScreen';
 import DetalleSolicitudClienteScreen from '../screens/cliente/DetalleSolicitudClienteScreen';
-
 import NotificacionesClienteScreen from '../screens/cliente/NotificacionesClienteScreen';
-
 import ConversacionesScreen from '../screens/shared/ConversacionesScreen';
 import ChatScreen from '../screens/shared/ChatScreen';
 import ChangePasswordScreen from '../screens/shared/ChangePasswordScreen';
 
-const Stack = createNativeStackNavigator();
-
-export default function ClienteNavigator() {
-  return (
-    <Stack.Navigator
-      initialRouteName="HomeCliente"
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen
-        name="HomeCliente"
-        component={HomeClienteScreen}
-      />
-
-      <Stack.Screen
-        name="PerfilCliente"
-        component={PerfilClienteScreen}
-      />
-
-      <Stack.Screen
-        name="EditarPerfilCliente"
-        component={EditarPerfilClienteScreen}
-      />
-
-      <Stack.Screen
-        name="BuscarServicios"
-        component={BuscarServiciosScreen}
-      />
-
-      <Stack.Screen
-        name="DetalleServicio"
-        component={DetalleServicioScreen}
-      />
-
-      <Stack.Screen
-        name="PerfilPublicoTrabajador"
-        component={PerfilPublicoTrabajadorScreen}
-      />
-
-      <Stack.Screen
-        name="ResenasTrabajador"
-        component={ResenasTrabajadorScreen}
-      />
-
-      <Stack.Screen
-        name="CrearResena"
-        component={CrearResenaScreen}
-      />
-
-      <Stack.Screen
-        name="RankingTrabajadores"
-        component={RankingTrabajadoresScreen}
-      />
-
-      <Stack.Screen
-        name="CrearSolicitud"
-        component={CrearSolicitudScreen}
-      />
-
-      <Stack.Screen
-        name="MisSolicitudes"
-        component={MisSolicitudesScreen}
-      />
-
-      <Stack.Screen
-        name="DetalleSolicitudCliente"
-        component={DetalleSolicitudClienteScreen}
-      />
-
-      <Stack.Screen
-        name="NotificacionesCliente"
-        component={NotificacionesClienteScreen}
-      />
-
-      <Stack.Screen
-        name="Conversaciones"
-        component={ConversacionesScreen}
-      />
-
-      <Stack.Screen
-        name="Chat"
-        component={ChatScreen}
-      />
-
-      <Stack.Screen
-        name="ChangePassword"
-        component={ChangePasswordScreen}
-      />
-    </Stack.Navigator>
-  );
-}
+export default createRoleTabs([
+  { name: 'InicioTab', label: 'Inicio', icon: 'home', screens: [
+    ['HomeCliente', HomeClienteScreen],
+    ['NotificacionesCliente', NotificacionesClienteScreen],
+  ] },
+  { name: 'BuscarTab', label: 'Buscar', icon: 'search', initialRouteName: 'BuscarServicios', screens: [
+    ['BuscarServicios', BuscarServiciosScreen],
+    ['DetalleServicio', DetalleServicioScreen],
+    ['PerfilPublicoTrabajador', PerfilPublicoTrabajadorScreen],
+    ['ResenasTrabajador', ResenasTrabajadorScreen],
+    ['RankingTrabajadores', RankingTrabajadoresScreen],
+  ] },
+  { name: 'SolicitudesTab', label: 'Solicitudes', icon: 'document-text', screens: [
+    ['MisSolicitudes', MisSolicitudesScreen],
+    ['CrearSolicitud', CrearSolicitudScreen],
+    ['DetalleSolicitudCliente', DetalleSolicitudClienteScreen],
+    ['CrearResena', CrearResenaScreen],
+  ] },
+  { name: 'MensajesTab', label: 'Mensajes', icon: 'chatbubbles', screens: [
+    ['Conversaciones', ConversacionesScreen],
+    ['Chat', ChatScreen],
+  ] },
+  { name: 'PerfilTab', label: 'Perfil', icon: 'person', initialRouteName: 'AjustesCliente', screens: [
+    ['AjustesCliente', AjustesClienteScreen],
+    ['PerfilCliente', PerfilClienteScreen],
+    ['EditarPerfilCliente', EditarPerfilClienteScreen],
+    ['ChangePassword', ChangePasswordScreen],
+  ] },
+]);

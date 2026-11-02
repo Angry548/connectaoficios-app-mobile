@@ -192,6 +192,36 @@ export default function PerfilPublicoTrabajadorScreen({
     ).replaceAll('_', ' ');
   };
 
+  const reportarTrabajador = () => {
+  const id =
+    Number(trabajadorId);
+
+  if (
+    !Number.isInteger(id) ||
+    id <= 0
+  ) {
+    return;
+  }
+
+  navigation.navigate(
+    'CrearReporte',
+    {
+      tipo: 'USUARIO',
+
+      usuarioReportadoId:
+        id,
+
+      objetivoNombre:
+        usuario?.nombre ||
+        'Trabajador',
+
+      objetivoSubtitulo:
+        perfil?.oficioPrincipal ||
+        'Trabajador de ConnectaOficios',
+    }
+  );
+};
+
   if (cargando) {
     return (
       <SafeAreaView style={styles.contenedor}>
@@ -523,6 +553,39 @@ export default function PerfilPublicoTrabajadorScreen({
                 color="#2563EB"
               />
             </Pressable>
+
+            <Pressable
+  style={styles.botonReportar}
+  onPress={reportarTrabajador}
+>
+  <Ionicons
+    name="flag-outline"
+    size={20}
+    color="#B42318"
+  />
+
+  <View
+    style={styles.botonReportarContenido}
+  >
+    <Text
+      style={styles.botonReportarTexto}
+    >
+      Reportar trabajador
+    </Text>
+
+    <Text
+      style={styles.botonReportarSubtexto}
+    >
+      Informar un posible incumplimiento
+    </Text>
+  </View>
+
+  <Ionicons
+    name="chevron-forward"
+    size={20}
+    color="#B42318"
+  />
+</Pressable>
           </>
         )}
       </ScrollView>
@@ -788,4 +851,34 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
   },
+  botonReportar: {
+  minHeight: 66,
+  backgroundColor: '#FEF3F2',
+  borderWidth: 1,
+  borderColor: '#FDA29B',
+  borderRadius: 16,
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 15,
+  paddingVertical: 12,
+  marginTop: 12,
+},
+
+botonReportarContenido: {
+  flex: 1,
+  marginLeft: 11,
+  marginRight: 8,
+},
+
+botonReportarTexto: {
+  color: '#B42318',
+  fontSize: 14,
+  fontWeight: '800',
+},
+
+botonReportarSubtexto: {
+  color: '#B54708',
+  fontSize: 11,
+  marginTop: 2,
+},
 });

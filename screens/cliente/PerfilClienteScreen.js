@@ -1,301 +1,135 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
-} from 'react-native';
+import AccountIdentityCard from '../../components/profile/AccountIdentityCard';
+import React, { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import UserAvatar from '../../components/UserAvatar';
+import ProfileHeader from '../../components/profile/ProfileHeader';
+import { perfilStyles as styles } from '../../components/profile/profileStyles';
+import { perfilClienteService, mensajeErrorPerfilCliente } from '../../services/perfilClienteService';
 import { useAuth } from '../../context/AuthContext';
 
-export default function PerfilClienteScreen({ navigation }) {
-  const { usuario, cerrarSesion } = useAuth();
+const formatearFecha = (fecha) => {
+  if (!fecha) return null;
+  const valor = new Date(fecha);
+  return Number.isNaN(valor.getTime()) ? null : valor.toLocaleDateString('es-SV');
+};
 
-  const manejarCerrarSesion = async () => {
-    await cerrarSesion();
-  };
+export default function PerfilClienteScreen({ navigation }) {
+  const { usuario } = useAuth();
+  const [perfil, setPerfil] = useState(null);
+  const [cargando, setCargando] = useState(true);
+  const [actualizando, setActualizando] = useState(false);
+  const [error, setError] = useState('');
+  const controlador = useRef(null);
+
+  const cargarPerfil = useCallback(async (mostrarCarga = true) => {
+    controlador.current?.abort();
+    const controller = new AbortController();
+    controlador.current = controller;
+    setCargando(mostrarCarga);
+    setActualizando(!mostrarCarga);
+    setError('');
+    try {
+      const resultado = await perfilClienteService.obtenerMiPerfil({ signal: controller.signal });
+      if (!controller.signal.aborted) setPerfil(resultado);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      if (err?.response?.status === 404) setPerfil(null);
+      else setError(mensajeErrorPerfilCliente(err, 'No se pudo cargar el perfil. Intenta nuevamente.'));
+    } finally {
+      if (!controller.signal.aborted) {
+        setCargando(false);
+        setActualizando(false);
+      }
+    }
+  }, [usuario?.id]);
+
+  useFocusEffect(useCallback(() => {
+    cargarPerfil();
+    return () => controlador.current?.abort();
+  }, [cargarPerfil]));
+
+  const editar = () => navigation.navigate('EditarPerfilCliente', { perfil, modoCreacion: !perfil });
+  const creacion = formatearFecha(perfil?.fechaCreacion);
+  const actualizacion = formatearFecha(perfil?.fechaActualizacion);
+
+  if (cargando) return (
+    <SafeAreaView style={styles.contenedor}>
+      <View style={styles.centro}>
+        <ActivityIndicator size="large" color="#2563EB" />
+        <Text style={styles.textoCarga}>Cargando perfil...</Text>
+      </View>
+    </SafeAreaView>
+  );
 
   return (
-    <SafeAreaView
-      style={styles.container}
-      edges={['top']}
-    >
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#12344D"
-      />
-
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.botonVolver}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="arrow-back-outline"
-            size={24}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
-
-        <View style={styles.headerTexto}>
-          <Text style={styles.tituloHeader}>
-            Mi perfil
-          </Text>
-
-          <Text style={styles.subtituloHeader}>
-            Cuenta de cliente
-          </Text>
-        </View>
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.contenido}
+    <SafeAreaView style={styles.contenedor}>
+      <ProfileHeader titulo="Mi perfil" subtitulo="Tu información personal y fotografía"
+        onBack={() => navigation.goBack()} onEdit={perfil && !error ? editar : undefined} />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.contenido}
         showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.perfil}>
-          <View style={styles.avatar}>
-            <Ionicons
-              name="person-outline"
-              size={35}
-              color="#0D9488"
-            />
+        refreshControl={<RefreshControl refreshing={actualizando} onRefresh={() => cargarPerfil(false)} />}>
+        {error ? (
+          <View style={styles.errorContenedor}>
+            <Ionicons name="alert-circle-outline" size={42} color="#B42318" />
+            <Text style={styles.errorTitulo}>No se pudo cargar tu perfil</Text>
+            <Text accessibilityRole="alert" style={styles.errorTexto}>{error}</Text>
+            <Pressable style={styles.botonReintentar} onPress={() => cargarPerfil()}>
+              <Text style={styles.botonReintentarTexto}>Intentar nuevamente</Text>
+            </Pressable>
           </View>
-
-          <View style={styles.datosPrincipales}>
-            <Text style={styles.nombre}>
-              {usuario?.nombre || 'Cliente'}
-            </Text>
-
-            <Text style={styles.correo}>
-              {usuario?.correo || 'Cuenta de ConnectaOficios'}
-            </Text>
-
-            <View style={styles.rolContainer}>
-              <Ionicons
-                name="person-circle-outline"
-                size={15}
-                color="#0D9488"
-              />
-
-              <Text style={styles.rol}>
-                Cliente
-              </Text>
+        ) : (
+          <>
+            <View style={styles.tarjetaPrincipal}>
+              <View style={styles.perfilSuperior}>
+                <UserAvatar fotoUrl={perfil?.fotoUrl} nombre={usuario?.nombre} size={72} style={styles.foto} />
+                <View style={styles.datosPrincipales}>
+                  <Text style={styles.oficio}>{usuario?.nombre || 'Cliente'}</Text>
+                  <View style={styles.ubicacionFila}>
+                    <Ionicons name="person-circle-outline" size={16} color="#667085" />
+                    <Text style={styles.ubicacionTexto}>Cliente</Text>
+                  </View>
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
-
-        <View style={styles.seccion}>
-          <Text style={styles.tituloSeccion}>
-            Seguridad
-          </Text>
-
-          <TouchableOpacity
-            style={styles.opcion}
-            onPress={() =>
-              navigation.navigate('ChangePassword')
-            }
-            activeOpacity={0.8}
-          >
-            <View style={styles.iconoOpcion}>
-              <Ionicons
-                name="lock-closed-outline"
-                size={22}
-                color="#0D9488"
-              />
-            </View>
-
-            <View style={styles.textoOpcion}>
-              <Text style={styles.tituloOpcion}>
-                Cambiar contraseña
-              </Text>
-
-              <Text style={styles.descripcionOpcion}>
-                Actualiza la contraseña utilizada para acceder a tu cuenta.
-              </Text>
-            </View>
-
-            <Ionicons
-              name="chevron-forward-outline"
-              size={21}
-              color="#94A3B8"
-            />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={styles.botonCerrarSesion}
-          onPress={manejarCerrarSesion}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name="log-out-outline"
-            size={21}
-            color="#DC2626"
-          />
-
-          <Text style={styles.textoCerrarSesion}>
-            Cerrar sesión
-          </Text>
-        </TouchableOpacity>
+            <AccountIdentityCard />
+            {!perfil ? (
+              <View style={styles.vacio}>
+                <View style={styles.iconoVacio}>
+                  <Ionicons name="person-outline" size={46} color="#2563EB" />
+                </View>
+                <Text style={styles.vacioTitulo}>Crea tu perfil</Text>
+                <Text style={styles.vacioTexto}>No tienes un perfil creado todavía. Agrega una fotografía para completar tu presentación.</Text>
+                <Pressable style={styles.botonCrear} onPress={editar}>
+                  <Ionicons name="add-circle-outline" size={21} color="#FFFFFF" />
+                  <Text style={styles.botonCrearTexto}>Crear perfil</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                {creacion || actualizacion ? (
+                  <View style={styles.tarjeta}>
+                    <View style={styles.seccionTituloFila}>
+                      <View style={styles.iconoSeccion}>
+                        <Ionicons name="calendar-outline" size={22} color="#2563EB" />
+                      </View>
+                      <Text style={styles.seccionTitulo}>Información del perfil</Text>
+                    </View>
+                    {creacion ? <Text style={styles.textoContenido}>Creado: {creacion}</Text> : null}
+                    {actualizacion ? <Text style={styles.textoContenido}>Actualizado: {actualizacion}</Text> : null}
+                  </View>
+                ) : null}
+                <Pressable style={styles.botonEditar} onPress={editar}>
+                  <Ionicons name="create-outline" size={21} color="#2563EB" />
+                  <Text style={styles.botonEditarTexto}>Editar perfil</Text>
+                </Pressable>
+              </>
+            )}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#12344D',
-  },
-  header: {
-    backgroundColor: '#12344D',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
-  },
-  botonVolver: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: '#1E506B',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 13,
-  },
-  headerTexto: {
-    flex: 1,
-  },
-  tituloHeader: {
-    color: '#FFFFFF',
-    fontSize: 21,
-    fontWeight: '800',
-  },
-  subtituloHeader: {
-    color: '#D6E4EC',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  scroll: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-  },
-  contenido: {
-    padding: 20,
-    paddingBottom: 36,
-  },
-  perfil: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 66,
-    height: 66,
-    borderRadius: 20,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  datosPrincipales: {
-    flex: 1,
-  },
-  nombre: {
-    color: '#172B3A',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  correo: {
-    color: '#64748B',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  rolContainer: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E6F4F1',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 20,
-    marginTop: 9,
-    gap: 4,
-  },
-  rol: {
-    color: '#0D9488',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  seccion: {
-    marginTop: 25,
-  },
-  tituloSeccion: {
-    color: '#172B3A',
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 10,
-  },
-  opcion: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconoOpcion: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: '#E6F4F1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 13,
-  },
-  textoOpcion: {
-    flex: 1,
-    marginRight: 8,
-  },
-  tituloOpcion: {
-    color: '#172B3A',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  descripcionOpcion: {
-    color: '#64748B',
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 3,
-  },
-  botonCerrarSesion: {
-    minHeight: 54,
-    backgroundColor: '#FEF2F2',
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 30,
-    gap: 8,
-  },
-  textoCerrarSesion: {
-    color: '#DC2626',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-});

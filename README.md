@@ -102,7 +102,7 @@ Antes de ejecutar el proyecto se debe tener instalado:
 - Git
 - Node.js
 - npm
-- Expo Go en el dispositivo móvil
+- Expo Go en el dispositivo móvil solo para pruebas manuales/UAT
 - Visual Studio Code o un editor equivalente
 
 ## Clonar el proyecto
@@ -122,7 +122,7 @@ cd connectaoficios-mobile
 Después de clonar el proyecto:
 
 ```bash
-npm install
+npm ci
 ```
 
 No es necesario instalar manualmente cada dependencia.
@@ -235,27 +235,7 @@ Los componentes reutilizables pueden separarse posteriormente dentro de una carp
 
 ## Flujo de Git
 
-Antes de comenzar una tarea se debe actualizar la rama base definida por el equipo.
-
-Cada integrante debe desarrollar sus tareas en una rama propia.
-
-Ejemplo:
-
-```bash
-git checkout develop
-git pull origin develop
-git checkout -b feature/codigo-jira-descripcion
-```
-
-Al finalizar:
-
-```bash
-git add .
-git commit -m "[Código_Jira] Nombre Integrante: Tarea trabajada - Descripción breve"
-git push origin feature/codigo-jira-descripcion
-```
-
-No se debe realizar `push` directamente a la rama principal sin revisión.
+Actualizar la base acordada con el líder mediante git pull. Las futuras ramas y casos se definen en Jira; no trabajar directamente en la rama principal sin revisión.
 
 ## Formato de commits
 
@@ -305,3 +285,28 @@ Antes de entregar una funcionalidad se debe comprobar que:
 ## Equipo
 
 Proyecto académico desarrollado por el equipo de ConnectaOficios.
+## Pruebas de Componentes React Native
+
+Mobile aporta Pruebas de Componentes React Native + Coverage y UAT. La ruta es Node + npm + Jest + React Native Testing Library; se mantiene Expo SDK 57.
+
+```bash
+npm ci
+npx expo start
+```
+
+Para pruebas aisladas (también en GitHub Codespaces):
+
+```bash
+npm test
+npm test -- UserAvatar.test.js
+npm test -- -t "muestra iniciales sin foto"
+npm run test:coverage
+```
+
+No se necesita dispositivo ni Expo Go para Jest. Expo Go se reserva para pruebas manuales, UAT y validación visual Android/iOS. No se necesita Docker.
+
+Los tests se organizan en tests/components, tests/screens, tests/helpers y tests/mocks. Jest usa jest-expo; SecureStore, ImagePicker, almacenamiento y APIs .NET/Java se simulan sin llamadas reales. La cobertura incluye archivos todavía sin pruebas y no bloquea por umbrales artificiales.
+
+Integrante: git pull, npm ci, ejecutar el archivo asignado, agregar casos de Jira, confirmar PASS y realizar commit/push en la futura rama acordada; no generar reporte global. Líder: integrar ramas, suite completa, coverage, abrir coverage/lcov-report/index.html, Ctrl + P → Guardar como PDF, capturas y Jira. coverage/ se ignora; no se genera ahora reporte definitivo.
+
+Consultar la [guía completa de testing](docs/testing/README.md) para mocks, ejemplos, auditoría de candidatos, Codespaces, reportes y UAT. Las futuras asignaciones de Eduardo, Óscar, Alfredo y Nuria se preparan en [TEAM_ASSIGNMENTS](docs/testing/TEAM_ASSIGNMENTS.md), pendientes de Jira y sin asignar ramas.

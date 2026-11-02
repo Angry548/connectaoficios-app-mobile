@@ -1,6 +1,6 @@
 import apiJava from './apiJava';
 
-const TAMANIO_PAGINA = 20;
+const TAMANIO_PAGINA = 10;
 
 const normalizarConversacion = (conversacion) => {
   if (!conversacion) {
@@ -24,6 +24,9 @@ const normalizarConversacion = (conversacion) => {
     trabajadorId:
       conversacion.trabajadorId ??
       null,
+
+    clienteFotoUrl: conversacion.clienteFotoUrl ?? null,
+    trabajadorFotoUrl: conversacion.trabajadorFotoUrl ?? null,
 
     fechaCreacion:
       conversacion.fechaCreacion ??

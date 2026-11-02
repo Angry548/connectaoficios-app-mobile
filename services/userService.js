@@ -50,11 +50,49 @@ const normalizarUsuario = (usuario) => {
   };
 };
 
+const registrar = async ({
+  nombre,
+  correo,
+  password,
+  telefono,
+  rolId,
+}) => {
+  const datos = {
+    nombre:
+      nombre?.trim() || '',
+
+    correo:
+      correo
+        ?.trim()
+        .toLowerCase() || '',
+
+    password:
+      password || '',
+
+    telefono:
+      telefono?.trim() || '',
+
+    rolId:
+      Number(rolId),
+  };
+
+  const response =
+    await apiDotNet.post(
+      '/api/users/register',
+      datos
+    );
+
+  return normalizarUsuario(
+    response.data
+  );
+};
+
 const obtenerUsuarioPorId = async (
   id,
   options = {}
 ) => {
-  const usuarioId = Number(id);
+  const usuarioId =
+    Number(id);
 
   if (
     !Number.isInteger(usuarioId) ||
@@ -65,18 +103,26 @@ const obtenerUsuarioPorId = async (
     );
   }
 
-  if (cacheUsuarios.has(usuarioId)) {
-    return cacheUsuarios.get(usuarioId);
+  if (
+    cacheUsuarios.has(
+      usuarioId
+    )
+  ) {
+    return cacheUsuarios.get(
+      usuarioId
+    );
   }
 
-  const response = await apiDotNet.get(
-    `/api/users/${usuarioId}`,
-    options
-  );
+  const response =
+    await apiDotNet.get(
+      `/api/users/${usuarioId}`,
+      options
+    );
 
-  const usuario = normalizarUsuario(
-    response.data
-  );
+  const usuario =
+    normalizarUsuario(
+      response.data
+    );
 
   if (usuario) {
     cacheUsuarios.set(
@@ -88,89 +134,104 @@ const obtenerUsuarioPorId = async (
   return usuario;
 };
 
-const obtenerUsuariosPorIds = async (
-  ids = [],
-  options = {}
-) => {
-  const idsUnicos = [
-    ...new Set(
-      ids
-        .map((id) => Number(id))
-        .filter(
-          (id) =>
-            Number.isInteger(id) &&
-            id > 0
-        )
-    ),
-  ];
+const obtenerUsuariosPorIds =
+  async (
+    ids = [],
+    options = {}
+  ) => {
+    const idsUnicos = [
+      ...new Set(
+        ids
+          .map(
+            (id) =>
+              Number(id)
+          )
+          .filter(
+            (id) =>
+              Number.isInteger(
+                id
+              ) &&
+              id > 0
+          )
+      ),
+    ];
 
-  const usuarios = {};
+    const usuarios = {};
 
-  await Promise.all(
-    idsUnicos.map(async (id) => {
-      try {
-        const usuario =
-          await obtenerUsuarioPorId(
-            id,
-            options
-          );
+    await Promise.all(
+      idsUnicos.map(
+        async (id) => {
+          try {
+            const usuario =
+              await obtenerUsuarioPorId(
+                id,
+                options
+              );
 
-        if (usuario) {
-          usuarios[id] = usuario;
+            if (usuario) {
+              usuarios[id] =
+                usuario;
+            }
+          } catch {
+            usuarios[id] =
+              null;
+          }
         }
-      } catch (error) {
-        usuarios[id] = null;
-      }
-    })
-  );
-
-  return usuarios;
-};
-
-const actualizarUsuarioActual = async (
-  datos,
-  options = {}
-) => {
-  const response = await apiDotNet.put(
-    '/api/users/me',
-    datos,
-    options
-  );
-
-  const usuarioRespuesta =
-    response.data?.user ??
-    response.data?.usuario ??
-    null;
-
-  const usuario =
-    normalizarUsuario(
-      usuarioRespuesta
+      )
     );
 
-  if (usuario?.id) {
-    cacheUsuarios.set(
-      Number(usuario.id),
-      usuario
-    );
-  }
-
-  return {
-    ...response.data,
-    user: usuario,
+    return usuarios;
   };
-};
 
-const obtenerUsuarioActual = async (
-  id,
-  options = {}
-) => {
-  return obtenerUsuarioPorId(
+const actualizarUsuarioActual =
+  async (
+    datos,
+    options = {}
+  ) => {
+    const response =
+      await apiDotNet.put(
+        '/api/users/me',
+        datos,
+        options
+      );
+
+    const usuarioRespuesta =
+      response.data?.user ??
+      response.data?.usuario ??
+      null;
+
+    const usuario =
+      normalizarUsuario(
+        usuarioRespuesta
+      );
+
+    if (usuario?.id) {
+      cacheUsuarios.set(
+        Number(usuario.id),
+        usuario
+      );
+    }
+
+    return {
+      ...response.data,
+      user: usuario,
+    };
+  };
+
+const obtenerUsuarioActual =
+  async (
     id,
-    options
-  );
-};
+    options = {}
+  ) => {
+    return obtenerUsuarioPorId(
+      id,
+      options
+    );
+  };
 
-const limpiarCacheUsuario = (id) => {
+const limpiarCacheUsuario = (
+  id
+) => {
   if (
     id === undefined ||
     id === null
@@ -179,18 +240,27 @@ const limpiarCacheUsuario = (id) => {
     return;
   }
 
-  const usuarioId = Number(id);
+  const usuarioId =
+    Number(id);
 
-  if (Number.isInteger(usuarioId)) {
-    cacheUsuarios.delete(usuarioId);
+  if (
+    Number.isInteger(
+      usuarioId
+    )
+  ) {
+    cacheUsuarios.delete(
+      usuarioId
+    );
   }
 };
 
-const limpiarCacheUsuarios = () => {
-  cacheUsuarios.clear();
-};
+const limpiarCacheUsuarios =
+  () => {
+    cacheUsuarios.clear();
+  };
 
 export const userService = {
+  registrar,
   obtenerUsuarioPorId,
   obtenerUsuariosPorIds,
   obtenerUsuarioActual,

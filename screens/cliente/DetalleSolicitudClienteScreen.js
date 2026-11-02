@@ -1,3 +1,4 @@
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useEffect,
@@ -130,15 +131,7 @@ const formatearHora = (valor) => {
   return String(valor).substring(0, 5);
 };
 
-const obtenerMensajeError = (error) => {
-  return (
-    error?.response?.data?.message ||
-    error?.response?.data?.mensaje ||
-    error?.response?.data?.title ||
-    error?.message ||
-    'No se pudo cargar el detalle de la solicitud.'
-  );
-};
+const obtenerMensajeError = (error, fallback = "No se pudo cargar el detalle de la solicitud.") => mensajeError(error, fallback);
 
 const FilaDato = ({
   icono,

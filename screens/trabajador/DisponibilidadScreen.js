@@ -1,3 +1,6 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useEffect,
@@ -33,6 +36,7 @@ export default function DisponibilidadScreen({
   navigation,
 }) {
   const servicioId = route?.params?.servicioId;
+  const paginacion = usePagination(String(servicioId));
 
   const [disponibilidades, setDisponibilidades] =
     useState([]);
@@ -77,66 +81,35 @@ export default function DisponibilidadScreen({
     };
   }, []);
 
-  const obtenerMensajeError = (
-    err,
-    predeterminado
-  ) => {
-    const data = err?.response?.data;
-
-    if (
-      data?.errors &&
-      typeof data.errors === 'object'
-    ) {
-      const mensajes = Object.values(
-        data.errors
-      )
-        .flat()
-        .filter(Boolean);
-
-      if (mensajes.length > 0) {
-        return mensajes.join('\n');
-      }
-    }
-
-    return (
-      data?.message ||
-      data?.mensaje ||
-      err?.message ||
-      predeterminado
-    );
-  };
+  const obtenerMensajeError = (error, fallback = "No pudimos cargar la información. Intenta nuevamente.") => mensajeError(error, fallback);
 
   const cargarDisponibilidades =
     useCallback(async () => {
-      if (!servicioId) {
-        setError(
-          'No se recibió el identificador del servicio.'
-        );
-        setCargando(false);
-        return;
-      }
-
-      setCargando(true);
-      setError('');
-
-      try {
-        const data =
-          await disponibilidadService.listarPorServicio(
-            servicioId
-          );
-
-        setDisponibilidades(data);
-      } catch (err) {
-        setError(
-          obtenerMensajeError(
-            err,
-            'No se pudo cargar la disponibilidad.'
-          )
-        );
-      } finally {
+    const solicitudPagina = paginacion.iniciarSolicitud();
+    if (!servicioId) {
+      setError('No se recibió el identificador del servicio.');
+      setCargando(false);
+      return;
+    }
+    setCargando(true);
+    setError('');
+    try {
+      const data = await disponibilidadService.buscarPaginadas({
+        servicioId,
+        page: paginacion.pagina,
+        size: 10
+      });
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setDisponibilidades(paginacion.registrar(data));
+    } catch (err) {
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setError(obtenerMensajeError(err, 'No se pudo cargar la disponibilidad.'));
+    } finally {
+      if (paginacion.esActual(solicitudPagina)) {
         setCargando(false);
       }
-    }, [servicioId]);
+    }
+  }, [paginacion.pagina, servicioId]);
 
   useEffect(() => {
     cargarDisponibilidades();
@@ -601,6 +574,7 @@ export default function DisponibilidadScreen({
             </View>
           ))
         )}
+        {!cargando && !error ? <PaginationControls {...paginacion.props} loading={cargando} /> : null}
       </ScrollView>
     </SafeAreaView>
   );

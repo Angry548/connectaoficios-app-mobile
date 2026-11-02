@@ -1,3 +1,6 @@
+import { crearHistorialChat, unirMensajes } from '../../services/historialChat';
+import { useUnreadMessages } from '../../context/UnreadMessagesContext';
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useEffect,
@@ -8,11 +11,10 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Keyboard,
   Platform,
   Pressable,
-  ScrollView,
+  FlatList,
   StyleSheet,
   Text,
   TextInput,
@@ -43,29 +45,14 @@ import {
   userService,
 } from '../../services/userService';
 
-import {
-  perfilTrabajadorService,
-} from '../../services/perfilTrabajadorService';
+import UserAvatar from '../../components/UserAvatar';
+import { obtenerFotoInterlocutor } from '../../services/avatarConversacion';
 
 import {
   secureStorage,
 } from '../../storage/secureStorage';
 
-const obtenerMensajeError = (error) => {
-  const data = error?.response?.data;
-
-  if (typeof data === 'string') {
-    return data;
-  }
-
-  return (
-    data?.message ||
-    data?.mensaje ||
-    data?.error ||
-    error?.message ||
-    'Ocurrió un error al procesar el chat.'
-  );
-};
+const obtenerMensajeError = (error, fallback = "Ocurrió un error al procesar el chat.") => mensajeError(error, fallback);
 
 const obtenerMiId = async () => {
   const token =
@@ -184,6 +171,7 @@ export default function ChatScreen({
   route,
   navigation,
 }) {
+  const { refrescarNoLeidos } = useUnreadMessages();
   const conversacionIdRecibido =
     route?.params?.conversacionId;
 
@@ -263,7 +251,8 @@ export default function ChatScreen({
     (animado = false) => {
       requestAnimationFrame(() => {
         scrollRef.current
-          ?.scrollToEnd({
+          ?.scrollToOffset({
+            offset: 0,
             animated: animado,
           });
       });
@@ -362,113 +351,78 @@ export default function ChatScreen({
       solicitudId,
     ]);
 
-  const cargarFotoTrabajador =
-    useCallback(
-      async (
-        conversacionActual,
-        miId
-      ) => {
-        const soyCliente =
-          Number(
-            conversacionActual
-              ?.clienteId
-          ) === Number(miId);
+  const historialRef = useRef(crearHistorialChat());
+  const sesionRef = useRef(0);
+  const activoRef = useRef(false);
+  const cercaDelFinalRef = useRef(true);
+  const desplazamientoManualRef = useRef(false);
+  const inicioRef = useRef(null);
+  const totalRef = useRef(null);
+  const consultasRef = useRef(new Set());
+  const leidosRef = useRef(new Set());
+  const [cargandoAnteriores, setCargandoAnteriores] = useState(false);
+  const [sinAnteriores, setSinAnteriores] = useState(false);
+  const [errorHistorial, setErrorHistorial] = useState('');
 
-        if (!soyCliente) {
-          setFotoUsuario(
-            fotoInicial
-          );
+  const incorporar = useCallback(async (lista, miId, sesion) => {
+    if (!activoRef.current || sesion !== sesionRef.current) return;
+    setMensajes(actuales => unirMensajes(actuales, lista));
+    const pendientes = lista.filter(m => !m.leido && Number(m.remitenteId) !== Number(miId) && !leidosRef.current.has(String(m.id)));
+    pendientes.forEach(m => leidosRef.current.add(String(m.id)));
+    // El contrato Java solo ofrece lectura individual, no batch/conversación.
+    await mensajeService.marcarMensajesRecibidosComoLeidos(pendientes, miId);
+    void refrescarNoLeidos();
+    pendientes.forEach(m => leidosRef.current.delete(String(m.id)));
+  }, [refrescarNoLeidos]);
 
-          return;
-        }
+  const cargarMensajes = useCallback(async (idConversacion, miId, mostrarError = false) => {
+    if (!idConversacion || !activoRef.current) return;
+    const sesion = sesionRef.current;
+    const clave = sesion + ':recientes';
+    if (consultasRef.current.has(clave)) return;
+    consultasRef.current.add(clave);
+    try {
+      const resultado = await historialRef.current.recientes(idConversacion, totalRef.current);
+      if (!activoRef.current || sesion !== sesionRef.current) return;
+      totalRef.current = resultado.total;
+      if (inicioRef.current === null) inicioRef.current = resultado.inicio;
+      setSinAnteriores(inicioRef.current === 0);
+      const desplazar = primeraCargaRef.current || cercaDelFinalRef.current;
+      primeraCargaRef.current = false;
+      await incorporar(resultado.mensajes, miId, sesion);
+      if (activoRef.current && sesion === sesionRef.current && desplazar) irAlFinal(false);
+    } catch (err) {
+      if (activoRef.current && sesion === sesionRef.current && mostrarError) setError(obtenerMensajeError(err));
+    } finally {
+      consultasRef.current.delete(clave);
+    }
+  }, [irAlFinal, incorporar]);
 
-        const trabajadorId =
-          Number(
-            conversacionActual
-              ?.trabajadorId
-          );
-
-        if (
-          !Number.isInteger(
-            trabajadorId
-          ) ||
-          trabajadorId <= 0
-        ) {
-          return;
-        }
-
-        try {
-          const perfil =
-            await perfilTrabajadorService
-              .obtenerPerfilPorTrabajador(
-                trabajadorId
-              );
-
-          setFotoUsuario(
-            perfil?.fotoUrl ??
-              fotoInicial ??
-              null
-          );
-        } catch {
-          setFotoUsuario(
-            fotoInicial
-          );
-        }
-      },
-      [fotoInicial]
-    );
-
-  const cargarMensajes =
-    useCallback(
-      async (
-        idConversacion,
-        miId,
-        mostrarError = false
-      ) => {
-        if (!idConversacion) {
-          return;
-        }
-
-        try {
-          const lista =
-            await mensajeService
-              .obtenerMensajesPorConversacion(
-                idConversacion
-              );
-
-          setMensajes(lista);
-
-          await mensajeService
-            .marcarMensajesRecibidosComoLeidos(
-              lista,
-              miId
-            );
-
-          if (
-            primeraCargaRef.current
-          ) {
-            primeraCargaRef.current =
-              false;
-
-            setTimeout(() => {
-              irAlFinal(false);
-            }, 100);
-          }
-        } catch (err) {
-          if (mostrarError) {
-            setError(
-              obtenerMensajeError(
-                err
-              )
-            );
-          }
-        }
-      },
-      [irAlFinal]
-    );
+  const cargarAnteriores = async () => {
+    if (!desplazamientoManualRef.current || !activoRef.current || !conversacion?.id || inicioRef.current === null || inicioRef.current <= 0) return;
+    const sesion = sesionRef.current;
+    const clave = sesion + ':anteriores';
+    if (consultasRef.current.has(clave)) return;
+    consultasRef.current.add(clave);
+    setCargandoAnteriores(true);
+    setErrorHistorial('');
+    try {
+      const resultado = await historialRef.current.anteriores(conversacion.id, inicioRef.current);
+      if (!activoRef.current || sesion !== sesionRef.current) return;
+      inicioRef.current = resultado.inicio;
+      setSinAnteriores(resultado.inicio === 0);
+      await incorporar(resultado.mensajes, usuarioId, sesion);
+    } catch (err) {
+      if (activoRef.current && sesion === sesionRef.current) setErrorHistorial(obtenerMensajeError(err));
+    } finally {
+      consultasRef.current.delete(clave);
+      if (activoRef.current && sesion === sesionRef.current) setCargandoAnteriores(false);
+    }
+  };
 
   const cargarChat =
     useCallback(async () => {
+      const sesion = sesionRef.current;
       setCargando(true);
       setError('');
 
@@ -487,8 +441,8 @@ export default function ChatScreen({
           );
         }
 
+        if (!activoRef.current || sesion !== sesionRef.current) return;
         setUsuarioId(miId);
-
         setConversacion(
           conversacionObtenida
         );
@@ -525,10 +479,8 @@ export default function ChatScreen({
           );
         }
 
-        await cargarFotoTrabajador(
-          conversacionObtenida,
-          miId
-        );
+        if (!activoRef.current || sesion !== sesionRef.current) return;
+        setFotoUsuario(obtenerFotoInterlocutor(conversacionObtenida, miId));
 
         await cargarMensajes(
           conversacionObtenida.id,
@@ -536,18 +488,18 @@ export default function ChatScreen({
           true
         );
       } catch (err) {
+        if (!activoRef.current || sesion !== sesionRef.current) return;
         setConversacion(null);
 
         setError(
           obtenerMensajeError(err)
         );
       } finally {
-        setCargando(false);
+        if (activoRef.current && sesion === sesionRef.current) setCargando(false);
       }
     }, [
       obtenerConversacion,
       nombreInicial,
-      cargarFotoTrabajador,
       cargarMensajes,
     ]);
 
@@ -556,9 +508,22 @@ export default function ChatScreen({
       primeraCargaRef.current =
         true;
 
+      activoRef.current = true;
+      sesionRef.current++;
+      inicioRef.current = null;
+      totalRef.current = null;
+      cercaDelFinalRef.current = true;
+      desplazamientoManualRef.current = false;
+      setMensajes([]);
+      setSinAnteriores(false);
+      setCargandoAnteriores(false);
+      setErrorHistorial('');
       cargarChat();
 
       return () => {
+        activoRef.current = false;
+        void refrescarNoLeidos();
+        sesionRef.current++;
         if (
           intervaloRef.current
         ) {
@@ -635,6 +600,7 @@ export default function ChatScreen({
     }
 
     setEnviando(true);
+    const sesion = sesionRef.current;
 
     try {
       const nuevoMensaje =
@@ -644,31 +610,11 @@ export default function ChatScreen({
             contenido
           );
 
+      if (!activoRef.current || sesion !== sesionRef.current) return;
       setTexto('');
 
-      setMensajes(
-        (actuales) => {
-          const existe =
-            actuales.some(
-              (mensaje) =>
-                Number(
-                  mensaje.id
-                ) ===
-                Number(
-                  nuevoMensaje.id
-                )
-            );
-
-          if (existe) {
-            return actuales;
-          }
-
-          return [
-            ...actuales,
-            nuevoMensaje,
-          ];
-        }
-      );
+      setMensajes(actuales => unirMensajes(actuales, [nuevoMensaje]));
+      cercaDelFinalRef.current = true;
 
       setTimeout(() => {
         irAlFinal(true);
@@ -838,7 +784,7 @@ export default function ChatScreen({
         ?.puedeEnviarMensajes
     );
 
-  let fechaAnterior = '';
+
 
   return (
     <SafeAreaView
@@ -863,28 +809,7 @@ export default function ChatScreen({
             styles.avatarEncabezado
           }
         >
-          {fotoUsuario ? (
-            <Image
-              source={{
-                uri: fotoUsuario,
-              }}
-              style={
-                styles.avatarFoto
-              }
-            />
-          ) : (
-            <View
-              style={
-                styles.avatarVacio
-              }
-            >
-              <Ionicons
-                name="person"
-                size={20}
-                color="#2563EB"
-              />
-            </View>
-          )}
+          <UserAvatar fotoUrl={fotoUsuario} nombre={nombreUsuario} size={42} />
         </View>
 
         <View
@@ -935,21 +860,31 @@ export default function ChatScreen({
       <View
         style={styles.areaChat}
       >
-        <ScrollView
+        <FlatList
           ref={scrollRef}
-          style={
-            styles.listaMensajes
-          }
-          contentContainerStyle={
-            styles.contenidoMensajes
-          }
+          style={styles.listaMensajes}
+          contentContainerStyle={styles.contenidoMensajes}
+          data={[...mensajes].reverse()}
+          inverted
+          keyExtractor={item => String(item.id)}
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
           showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
+          maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+          onScrollBeginDrag={() => { desplazamientoManualRef.current = true; }}
+          onEndReached={cargarAnteriores}
+          onEndReachedThreshold={0.15}
+          onScroll={({ nativeEvent }) => {
+            const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
+            cercaDelFinalRef.current = contentOffset.y < 80;
+            if (contentSize.height - layoutMeasurement.height - contentOffset.y < 80) cargarAnteriores();
+          }}
           scrollEventThrottle={16}
-        >
-          {mensajes.length === 0 ? (
+          ListFooterComponent={cargandoAnteriores ? <View style={{ padding: 12 }}><ActivityIndicator size="small" /><Text style={styles.textoCarga}>Cargando mensajes anteriores...</Text></View>
+            : errorHistorial ? <Text style={styles.textoCarga}>{errorHistorial}</Text>
+            : sinAnteriores && mensajes.length ? <Text style={styles.textoCarga}>Inicio de la conversación</Text> : null}
+          ListEmptyComponent={
+
             <View
               style={
                 styles.chatVacio
@@ -985,26 +920,10 @@ export default function ChatScreen({
                   : 'Esta conversación todavía no tiene mensajes.'}
               </Text>
             </View>
-          ) : (
-            <View
-              style={
-                styles.grupoMensajes
-              }
-            >
-              {mensajes.map(
-                (mensaje) => {
-                  const claveFecha =
-                    obtenerClaveFecha(
-                      mensaje.fechaEnvio
-                    );
-
-                  const mostrarFecha =
-                    claveFecha !==
-                    fechaAnterior;
-
-                  fechaAnterior =
-                    claveFecha;
-
+          }
+          renderItem={({ item: mensaje, index }) => {
+                  const anterior = mensajes[mensajes.length - index - 2];
+                  const mostrarFecha = !anterior || obtenerClaveFecha(mensaje.fechaEnvio) !== obtenerClaveFecha(anterior.fechaEnvio);
                   const esMio =
                     Number(
                       mensaje.remitenteId
@@ -1090,7 +1009,7 @@ export default function ChatScreen({
                                 size={15}
                                 color={
                                   mensaje.leido
-                                    ? '#CCFBF1'
+                                    ? '#60A5FA'
                                     : '#D1FAE5'
                                 }
                                 style={
@@ -1103,11 +1022,8 @@ export default function ChatScreen({
                       </View>
                     </React.Fragment>
                   );
-                }
-              )}
-            </View>
-          )}
-        </ScrollView>
+          }}
+        />
 
         {!puedeEnviar ? (
           <View

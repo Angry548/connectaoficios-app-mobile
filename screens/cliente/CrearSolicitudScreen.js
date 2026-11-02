@@ -1,3 +1,4 @@
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useEffect,
   useMemo,
@@ -205,51 +206,7 @@ export default function CrearSolicitudScreen({
     setHoraAproximada(resultado);
   };
 
-  const obtenerMensajeError = (err) => {
-    const data = err?.response?.data;
-
-    if (typeof data === 'string') {
-      return data;
-    }
-
-    if (
-      data?.message ||
-      data?.mensaje ||
-      data?.error
-    ) {
-      return (
-        data.message ||
-        data.mensaje ||
-        data.error
-      );
-    }
-
-    if (
-      data &&
-      typeof data === 'object'
-    ) {
-      const primerValor =
-        Object.values(data)[0];
-
-      if (Array.isArray(primerValor)) {
-        return (
-          primerValor[0] ||
-          'No se pudo registrar la solicitud.'
-        );
-      }
-
-      if (
-        typeof primerValor === 'string'
-      ) {
-        return primerValor;
-      }
-    }
-
-    return (
-      err?.message ||
-      'No se pudo registrar la solicitud.'
-    );
-  };
+  const obtenerMensajeError = (error, fallback = "No se pudo registrar la solicitud.") => mensajeError(error, fallback);
 
   const validarFormulario = () => {
     if (!servicioId) {

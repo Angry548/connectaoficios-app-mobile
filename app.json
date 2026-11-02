@@ -1,20 +1,19 @@
 {
   "expo": {
-    "name": "connectaoficios-mobile",
+    "name": "ConnectaOficios",
     "slug": "connectaoficios-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/brand/app-icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/brand/adaptive-foreground.png",
+        "monochromeImage": "./assets/brand/adaptive-monochrome.png"
       },
       "permissions": [
         "android.permission.RECORD_AUDIO"
@@ -22,7 +21,7 @@
       "package": "com.remate827.connectaoficiosmobile"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/brand/favicon.png"
     },
     "plugins": [
       "expo-secure-store",
@@ -31,6 +30,15 @@
         "expo-image-picker",
         {
           "photosPermission": "ConnectaOficios necesita acceso a tus fotos para seleccionar tu fotografía de perfil."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/brand/splash.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#F8FAFC"
         }
       ]
     ],

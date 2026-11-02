@@ -1,3 +1,6 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { listadosPaginados } from '../../services/listadosPaginados';
 import React, {
   useCallback,
   useEffect,
@@ -22,7 +25,7 @@ import transaccionPagoService from '../../services/transaccionPagoService';
 import promocionService from '../../services/promocionService';
 import { servicioService } from '../../services/servicioService';
 
-const ELEMENTOS_POR_PAGINA = 5;
+const ELEMENTOS_POR_PAGINA = 10;
 
 const FILTROS = [
   {
@@ -235,7 +238,7 @@ export default function HistorialPagosScreen({
 
   const [
     busqueda,
-    setBusqueda,
+    setBusquedaBase,
   ] = useState('');
 
   const [
@@ -243,80 +246,45 @@ export default function HistorialPagosScreen({
     setFiltroEstado,
   ] = useState('TODAS');
 
-  const [
-    paginaActual,
-    setPaginaActual,
-  ] = useState(1);
+  const paginacion = usePagination(filtroEstado);
+  const setBusqueda = valor => { setBusquedaBase(valor); paginacion.setPagina(0); };
 
-  const cargarDatos = useCallback(
-    async (mostrarCarga = true) => {
-      if (mostrarCarga) {
-        setCargando(true);
-      }
-
-      setError('');
-
-      try {
-        const [
-          transaccionesRespuesta,
-          promocionesRespuesta,
-          serviciosRespuesta,
-        ] = await Promise.all([
-          transaccionPagoService.obtenerMisTransacciones(),
-          promocionService.obtenerMisPromociones(),
-          servicioService.listarMisServicios(),
-        ]);
-
-        const listaTransacciones =
-          Array.isArray(transaccionesRespuesta)
-            ? transaccionesRespuesta
-            : [];
-
-        const listaPromociones =
-          Array.isArray(promocionesRespuesta)
-            ? promocionesRespuesta
-            : [];
-
-        const listaServicios =
-          Array.isArray(serviciosRespuesta)
-            ? serviciosRespuesta
-            : [];
-
-        const ordenadas = [
-          ...listaTransacciones,
-        ].sort((a, b) => {
-          const fechaA = new Date(
-            a?.fecha || 0
-          ).getTime();
-
-          const fechaB = new Date(
-            b?.fecha || 0
-          ).getTime();
-
-          return fechaB - fechaA;
-        });
-
-        setTransacciones(ordenadas);
-        setPromociones(listaPromociones);
-        setServicios(listaServicios);
-      } catch (err) {
-        const mensaje =
-          obtenerMensajeError(
-            err,
-            'No se pudo cargar el historial de pagos.'
-          );
-
-        setError(mensaje);
-        setTransacciones([]);
-        setPromociones([]);
-        setServicios([]);
-      } finally {
+  const cargarDatos = useCallback(async (mostrarCarga = true) => {
+    const solicitudPagina = paginacion.iniciarSolicitud();
+    if (mostrarCarga) {
+      setCargando(true);
+    }
+    setError('');
+    try {
+      const respuesta = await listadosPaginados.transacciones(paginacion.pagina, {
+        estado: filtroEstado === 'TODAS' ? undefined : filtroEstado
+      });
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const listaTransacciones = paginacion.registrar(respuesta);
+      const [listaPromociones, listaServicios] = await Promise.all([Promise.all([...new Set(listaTransacciones.map(t => t.promocionId))].filter(Boolean).map(id => promocionService.obtenerPorId(id).catch(() => null))), Promise.all([...new Set(listaTransacciones.map(t => t.servicioId))].filter(Boolean).map(id => servicioService.obtenerPorId(id).catch(() => null)))]);
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const ordenadas = [...listaTransacciones].sort((a, b) => {
+        const fechaA = new Date(a?.fecha || 0).getTime();
+        const fechaB = new Date(b?.fecha || 0).getTime();
+        return fechaB - fechaA;
+      });
+      setTransacciones(ordenadas);
+      setPromociones(listaPromociones.filter(Boolean));
+      setServicios(listaServicios.filter(Boolean));
+    } catch (err) {
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const mensaje = obtenerMensajeError(err, 'No se pudo cargar el historial de pagos.');
+      setError(mensaje);
+      setTransacciones([]);
+      setPromociones([]);
+      setServicios([]);
+    } finally {
+      if (paginacion.esActual(solicitudPagina)) {
         setCargando(false);
         setActualizando(false);
       }
-    },
-    []
-  );
+    }
+  }, [paginacion.pagina, filtroEstado]);
 
   useFocusEffect(
     useCallback(() => {
@@ -326,7 +294,7 @@ export default function HistorialPagosScreen({
 
   const actualizar = async () => {
     setActualizando(true);
-    setPaginaActual(1);
+
 
     await cargarDatos(false);
   };
@@ -448,80 +416,7 @@ export default function HistorialPagosScreen({
       obtenerNombreServicio,
     ]);
 
-  const totalPaginas = useMemo(
-    () =>
-      Math.max(
-        1,
-        Math.ceil(
-          transaccionesFiltradas.length /
-            ELEMENTOS_POR_PAGINA
-        )
-      ),
-    [transaccionesFiltradas]
-  );
-
-  useEffect(() => {
-    setPaginaActual(1);
-  }, [
-    busqueda,
-    filtroEstado,
-  ]);
-
-  useEffect(() => {
-    if (
-      paginaActual > totalPaginas
-    ) {
-      setPaginaActual(totalPaginas);
-    }
-  }, [
-    paginaActual,
-    totalPaginas,
-  ]);
-
-  const transaccionesPagina =
-    useMemo(() => {
-      const inicio =
-        (paginaActual - 1) *
-        ELEMENTOS_POR_PAGINA;
-
-      const fin =
-        inicio +
-        ELEMENTOS_POR_PAGINA;
-
-      return transaccionesFiltradas.slice(
-        inicio,
-        fin
-      );
-    }, [
-      transaccionesFiltradas,
-      paginaActual,
-    ]);
-
-  const rangoInicio =
-    transaccionesFiltradas.length === 0
-      ? 0
-      : (paginaActual - 1) *
-          ELEMENTOS_POR_PAGINA +
-        1;
-
-  const rangoFin = Math.min(
-    paginaActual *
-      ELEMENTOS_POR_PAGINA,
-    transaccionesFiltradas.length
-  );
-
-  const cambiarPagina = (
-    nuevaPagina
-  ) => {
-    if (
-      nuevaPagina < 1 ||
-      nuevaPagina > totalPaginas
-    ) {
-      return;
-    }
-
-    setPaginaActual(nuevaPagina);
-  };
+  const transaccionesPagina = transaccionesFiltradas;
 
   const confirmarCancelacion = (
     transaccion
@@ -1093,7 +988,7 @@ export default function HistorialPagosScreen({
                 onChangeText={
                   setBusqueda
                 }
-                placeholder="Buscar transacciones"
+                placeholder="Buscar en esta página"
                 placeholderTextColor="#98A2B3"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -1247,123 +1142,12 @@ export default function HistorialPagosScreen({
                   renderTransaccion
                 )}
 
-                {totalPaginas > 1 ? (
-                  <View
-                    style={
-                      styles.paginacion
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.paginacionResumen
-                      }
-                    >
-                      Mostrando{' '}
-                      {rangoInicio}-
-                      {rangoFin} de{' '}
-                      {
-                        transaccionesFiltradas.length
-                      }
-                    </Text>
 
-                    <View
-                      style={
-                        styles.paginacionControles
-                      }
-                    >
-                      <Pressable
-                        style={[
-                          styles.botonPagina,
-                          paginaActual ===
-                            1 &&
-                            styles.botonPaginaDeshabilitado,
-                        ]}
-                        onPress={() =>
-                          cambiarPagina(
-                            paginaActual -
-                              1
-                          )
-                        }
-                        disabled={
-                          paginaActual ===
-                          1
-                        }
-                      >
-                        <Ionicons
-                          name="chevron-back"
-                          size={19}
-                          color={
-                            paginaActual ===
-                            1
-                              ? '#98A2B3'
-                              : '#2563EB'
-                          }
-                        />
-                      </Pressable>
-
-                      <View
-                        style={
-                          styles.numeroPagina
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.numeroPaginaTexto
-                          }
-                        >
-                          {
-                            paginaActual
-                          }
-                        </Text>
-                      </View>
-
-                      <Text
-                        style={
-                          styles.totalPaginasTexto
-                        }
-                      >
-                        de{' '}
-                        {
-                          totalPaginas
-                        }
-                      </Text>
-
-                      <Pressable
-                        style={[
-                          styles.botonPagina,
-                          paginaActual ===
-                            totalPaginas &&
-                            styles.botonPaginaDeshabilitado,
-                        ]}
-                        onPress={() =>
-                          cambiarPagina(
-                            paginaActual +
-                              1
-                          )
-                        }
-                        disabled={
-                          paginaActual ===
-                          totalPaginas
-                        }
-                      >
-                        <Ionicons
-                          name="chevron-forward"
-                          size={19}
-                          color={
-                            paginaActual ===
-                            totalPaginas
-                              ? '#98A2B3'
-                              : '#2563EB'
-                          }
-                        />
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : null}
               </>
             )}
           </>
         )}
+      {!cargando && !error ? <PaginationControls {...paginacion.props} notice={busqueda.trim() ? 'La búsqueda se aplica a los registros de esta página.' : null} loading={cargando} /> : null}
       </ScrollView>
     </SafeAreaView>
   );

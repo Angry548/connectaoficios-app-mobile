@@ -2,7 +2,7 @@ import { jwtDecode } from 'jwt-decode';
 import apiJava from './apiJava';
 import { secureStorage } from '../storage/secureStorage';
 
-const TAMANIO_PAGINA = 20;
+const TAMANIO_PAGINA = 10;
 
 const obtenerValorClaim = (payload, claves) => {
   for (const clave of claves) {

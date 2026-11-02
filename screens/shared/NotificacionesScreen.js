@@ -1,3 +1,5 @@
+import { textoPaginacion } from '../../services/paginacion';
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useMemo,
@@ -61,14 +63,7 @@ const obtenerConfiguracion = (tipo) =>
   CONFIGURACION_TIPO[tipo] ??
   CONFIGURACION_TIPO.SISTEMA;
 
-const obtenerMensajeError = (
-  error,
-  predeterminado
-) =>
-  error?.response?.data?.message ||
-  error?.response?.data?.mensaje ||
-  error?.message ||
-  predeterminado;
+const obtenerMensajeError = (error, fallback = "No pudimos cargar la información. Intenta nuevamente.") => mensajeError(error, fallback);
 
 const formatearFecha = (fecha) => {
   if (!fecha) {
@@ -113,6 +108,7 @@ export default function NotificacionesScreen({
     useState('');
   const [paginaActual, setPaginaActual] =
     useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(0);
   const [ultimaPagina, setUltimaPagina] =
     useState(true);
   const [totalElementos, setTotalElementos] =
@@ -163,6 +159,7 @@ export default function NotificacionesScreen({
           notificacionService.contarNoLeidas(),
         ]);
 
+        setTotalPaginas(paginaResultado.totalPaginas);
         setCantidadNoLeidas(noLeidas);
         setPaginaActual(
           paginaResultado.pagina
@@ -852,9 +849,7 @@ export default function NotificacionesScreen({
               <Text
                 style={styles.resultados}
               >
-                {totalElementos === 1
-                  ? '1 notificación'
-                  : `${totalElementos} notificaciones`}
+                {textoPaginacion({ currentPage: paginaActual, totalPages: totalPaginas, totalItems: totalElementos, currentItemCount: notificaciones.length, accumulated: true })}
               </Text>
             ) : null
           }

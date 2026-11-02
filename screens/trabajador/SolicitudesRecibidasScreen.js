@@ -1,3 +1,8 @@
+import { mensajeError } from '../../services/mensajesError';
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { useFocusEffect } from '@react-navigation/native';
+import { listadosPaginados } from '../../services/listadosPaginados';
 import React, {
   useCallback,
   useMemo,
@@ -101,71 +106,47 @@ export default function SolicitudesRecibidasScreen({
   const [solicitudes, setSolicitudes] = useState([]);
   const [clientes, setClientes] = useState({});
   const [filtro, setFiltro] = useState('TODAS');
+  const paginacion = usePagination(filtro);
   const [cargando, setCargando] = useState(true);
   const [actualizando, setActualizando] = useState(false);
   const [error, setError] = useState(null);
 
   const cargarSolicitudes = useCallback(async () => {
+    const solicitudPagina = paginacion.iniciarSolicitud();
     try {
       setError(null);
-
-      const resultado =
-        await solicitudService.obtenerMisSolicitudesTrabajador();
-
+      const paginaRespuesta = await listadosPaginados.solicitudesTrabajador(paginacion.pagina, filtro);
+      if (!paginacion.esActual(solicitudPagina)) return;
+      const resultado = paginacion.registrar(paginaRespuesta);
       setSolicitudes(resultado);
-
-      const idsClientes = [
-        ...new Set(
-          resultado
-            .map((item) => Number(item.clienteId))
-            .filter((id) => Number.isInteger(id) && id > 0)
-        ),
-      ];
-
-      const resultadosUsuarios =
-        await Promise.all(
-          idsClientes.map(async (id) => {
-            try {
-              const usuario =
-                await userService.obtenerUsuarioPorId(id);
-
-              return [id, usuario];
-            } catch {
-              return [id, null];
-            }
-          })
-        );
-
-      setClientes(
-        Object.fromEntries(resultadosUsuarios)
-      );
+      const idsClientes = [...new Set(resultado.map(item => Number(item.clienteId)).filter(id => Number.isInteger(id) && id > 0))];
+      const resultadosUsuarios = await Promise.all(idsClientes.map(async id => {
+        try {
+          const usuario = await userService.obtenerUsuarioPorId(id);
+          return [id, usuario];
+        } catch {
+          return [id, null];
+        }
+      }));
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setClientes(Object.fromEntries(resultadosUsuarios));
     } catch (excepcion) {
-      setError(
-        excepcion.message ||
-          'No se pudieron cargar las solicitudes recibidas.'
-      );
+      if (!paginacion.esActual(solicitudPagina)) return;
+      setError(excepcion?.response?.status === 403 ? 'No tienes permisos para acceder a esta información.' : mensajeError(excepcion, 'No se pudieron cargar las solicitudes recibidas.'));
     } finally {
-      setCargando(false);
-      setActualizando(false);
+      if (paginacion.esActual(solicitudPagina)) {
+        setCargando(false);
+        setActualizando(false);
+      }
     }
-  }, []);
+  }, [paginacion.pagina, filtro]);
 
   const refrescar = useCallback(async () => {
     setActualizando(true);
     await cargarSolicitudes();
   }, [cargarSolicitudes]);
 
-  React.useEffect(() => {
-    const unsubscribe = navigation.addListener(
-      'focus',
-      () => {
-        setCargando(true);
-        cargarSolicitudes();
-      }
-    );
-
-    return unsubscribe;
-  }, [navigation, cargarSolicitudes]);
+  useFocusEffect(useCallback(() => { setCargando(true); cargarSolicitudes(); }, [cargarSolicitudes]));
 
   const solicitudesFiltradas = useMemo(() => {
     if (filtro === 'TODAS') {
@@ -324,7 +305,7 @@ export default function SolicitudesRecibidasScreen({
             {pendientes > 0
               ? `${pendientes} pendiente${
                   pendientes === 1 ? '' : 's'
-                } por revisar`
+                } por revisar en esta página`
               : 'Gestiona tus solicitudes'}
           </Text>
         </View>
@@ -426,6 +407,7 @@ export default function SolicitudesRecibidasScreen({
           </View>
         ) : (
           <FlatList
+            ListFooterComponent={<PaginationControls {...paginacion.props} loading={cargando} />}
             data={solicitudesFiltradas}
             keyExtractor={(item) =>
               String(item.idSolicitud)

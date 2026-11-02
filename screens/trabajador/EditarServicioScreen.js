@@ -1,3 +1,7 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
+import { listadosPaginados } from '../../services/listadosPaginados';
+import { mensajeError } from '../../services/mensajesError';
 import React, {
   useCallback,
   useEffect,
@@ -46,6 +50,7 @@ export default function EditarServicioScreen({
   const [eliminando, setEliminando] = useState(false);
   const [error, setError] = useState('');
   const [alturaTeclado, setAlturaTeclado] = useState(0);
+  const categoriasPagina = usePagination(busquedaCategoria.trim());
   const solicitudCategoriaRef = useRef(0);
 
   useEffect(() => {
@@ -155,16 +160,13 @@ export default function EditarServicioScreen({
 
       try {
         const data =
-          await servicioService.buscarCategorias(
-            texto,
-            10
-          );
+          await listadosPaginados.categorias(categoriasPagina.pagina, texto);
 
         if (
           solicitudActual ===
           solicitudCategoriaRef.current
         ) {
-          setResultadosCategoria(data);
+          setResultadosCategoria(categoriasPagina.registrar(data));
         }
       } catch (err) {
         if (
@@ -190,7 +192,7 @@ export default function EditarServicioScreen({
     }, 350);
 
     return () => clearTimeout(temporizador);
-  }, [busquedaCategoria, categoriaSeleccionada]);
+  }, [categoriasPagina.pagina, busquedaCategoria, categoriaSeleccionada]);
 
   const seleccionarCategoria = (categoria) => {
     setCategoriaId(Number(categoria.id));
@@ -212,32 +214,7 @@ export default function EditarServicioScreen({
   const normalizarDecimal = (valor) =>
     valor.replace(',', '.').trim();
 
-  const obtenerMensajeError = (
-    err,
-    mensajePredeterminado
-  ) => {
-    const data = err?.response?.data;
-
-    if (
-      data?.errors &&
-      typeof data.errors === 'object'
-    ) {
-      const mensajes = Object.values(data.errors)
-        .flat()
-        .filter(Boolean);
-
-      if (mensajes.length > 0) {
-        return mensajes.join('\n');
-      }
-    }
-
-    return (
-      data?.message ||
-      data?.mensaje ||
-      err?.message ||
-      mensajePredeterminado
-    );
-  };
+  const obtenerMensajeError = (error, fallback = "No pudimos cargar la información. Intenta nuevamente.") => mensajeError(error, fallback);
 
   const validarFormulario = () => {
     const tituloLimpio = titulo.trim();
@@ -844,6 +821,7 @@ export default function EditarServicioScreen({
                   />
                 </Pressable>
               ))}
+{!buscandoCategoria && !errorCategoria && !categoriaSeleccionada && busquedaCategoria.trim().length >= 2 ? <PaginationControls {...categoriasPagina.props} loading={buscandoCategoria} /> : null}
             </View>
           ) : null}
         </View>

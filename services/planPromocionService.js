@@ -42,7 +42,7 @@ const normalizarLista = (data) =>
 
 const obtenerActivos = async (
   page = 0,
-  size = 20,
+  size = 10,
   options = {}
 ) => {
   const response = await apiJava.get(

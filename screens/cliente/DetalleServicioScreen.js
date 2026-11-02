@@ -1,3 +1,5 @@
+import PaginationControls from '../../components/PaginationControls';
+import { usePagination, useLocalPagination } from '../../hooks/usePagination';
 import React, {
   useCallback,
   useEffect,
@@ -54,143 +56,77 @@ export default function DetalleServicioScreen({
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
+  const horariosPagina = usePagination(String(servicioId));
+  const zonasPagina = useLocalPagination(zonas, String(servicioId));
   const cargarDetalle = useCallback(async () => {
+    const solicitudPagina = horariosPagina.iniciarSolicitud();
     if (!servicioId) {
-      setError(
-        'No se recibió el identificador del servicio.'
-      );
+      setError('No se recibió el identificador del servicio.');
       setCargando(false);
       return;
     }
-
     setCargando(true);
     setError('');
-
     try {
-      const servicioActual =
-        await servicioService.obtenerPorId(
-          servicioId
-        );
-
+      const servicioActual = await servicioService.obtenerPorId(servicioId);
+      if (!horariosPagina.esActual(solicitudPagina)) return;
       setServicio(servicioActual);
-
-      const [
-        categoriasDisponibles,
-        horariosDisponibles,
-      ] = await Promise.all([
-        servicioService
-          .listarCategorias()
-          .catch(() => []),
-        disponibilidadService
-          .listarActivasPorServicio(servicioId)
-          .catch(() => []),
-      ]);
-
-      const categoriaActual =
-        categoriasDisponibles.find(
-          (item) =>
-            Number(item.id) ===
-            Number(servicioActual.categoriaId)
-        ) ?? null;
-
+      const [categoriasDisponibles, horariosDisponibles] = await Promise.all([servicioService.obtenerCategoriaPorId(servicioActual.categoriaId).catch(() => []), disponibilidadService.buscarPaginadas({
+        servicioId,
+        activo: true,
+        page: horariosPagina.pagina,
+        size: 10
+      }).catch(() => [])]);
+      if (!horariosPagina.esActual(solicitudPagina)) return;
+      const categoriaActual = categoriasDisponibles;
       setCategoria(categoriaActual);
-      setDisponibilidades(
-        horariosDisponibles
-      );
-
-      const idsZonas = Array.isArray(
-        servicioActual.zonasCoberturaIds
-      )
-        ? servicioActual.zonasCoberturaIds
-        : [];
-
+      setDisponibilidades(horariosPagina.registrar(horariosDisponibles));
+      const idsZonas = Array.isArray(servicioActual.zonasCoberturaIds) ? servicioActual.zonasCoberturaIds : [];
       if (idsZonas.length > 0) {
-        const zonasObtenidas =
-          await Promise.all(
-            idsZonas.map((id) =>
-              zonaCoberturaService
-                .obtenerPorId(id)
-                .catch(() => null)
-            )
-          );
-
-        setZonas(
-          zonasObtenidas.filter(Boolean)
-        );
+        const zonasObtenidas = await Promise.all(idsZonas.map(id => zonaCoberturaService.obtenerPorId(id).catch(() => null)));
+        if (!horariosPagina.esActual(solicitudPagina)) return;
+        setZonas(zonasObtenidas.filter(Boolean));
       } else {
         setZonas([]);
       }
-
-      const perfilId = Number(
-        servicioActual.perfilTrabajadorId
-      );
-
-      if (
-        Number.isInteger(perfilId) &&
-        perfilId > 0
-      ) {
+      const perfilId = Number(servicioActual.perfilTrabajadorId);
+      if (Number.isInteger(perfilId) && perfilId > 0) {
         try {
-          const perfil =
-            await servicioService.obtenerPerfilTrabajadorPorId(
-              perfilId
-            );
-
+          const perfil = await servicioService.obtenerPerfilTrabajadorPorId(perfilId);
+          if (!horariosPagina.esActual(solicitudPagina)) return;
           setPerfilTrabajador(perfil);
-
-          const trabajadorId = Number(
-            perfil?.trabajadorId
-          );
-
-          if (
-            Number.isInteger(trabajadorId) &&
-            trabajadorId > 0
-          ) {
+          const trabajadorId = Number(perfil?.trabajadorId);
+          if (Number.isInteger(trabajadorId) && trabajadorId > 0) {
             try {
-              const usuario =
-                await userService.obtenerUsuarioPorId(
-                  trabajadorId
-                );
-
+              const usuario = await userService.obtenerUsuarioPorId(trabajadorId);
+              if (!horariosPagina.esActual(solicitudPagina)) return;
               setUsuarioTrabajador(usuario);
             } catch {
+              if (!horariosPagina.esActual(solicitudPagina)) return;
               setUsuarioTrabajador(null);
             }
           } else {
             setUsuarioTrabajador(null);
           }
         } catch {
+          if (!horariosPagina.esActual(solicitudPagina)) return;
           setPerfilTrabajador(null);
           setUsuarioTrabajador(null);
         }
-
         try {
-          const reputacionObtenida =
-            await reputacionService.obtenerPorPerfilTrabajador(
-              perfilId
-            );
-
-          setReputacion(
-            reputacionObtenida
-          );
+          const reputacionObtenida = await reputacionService.obtenerPorPerfilTrabajador(perfilId);
+          if (!horariosPagina.esActual(solicitudPagina)) return;
+          setReputacion(reputacionObtenida);
         } catch {
+          if (!horariosPagina.esActual(solicitudPagina)) return;
           setReputacion(null);
         }
-
         try {
-          const paginaServicios =
-            await servicioService.listarPorTrabajador(
-              perfilId,
-              0,
-              1
-            );
-
-          setTotalServiciosTrabajador(
-            Number(
-              paginaServicios?.totalElementos ??
-                0
-            )
-          );
+          const paginaServicios = await servicioService.listarPorTrabajador(perfilId, 0, 1);
+          if (!horariosPagina.esActual(solicitudPagina)) return;
+          setTotalServiciosTrabajador(Number(paginaServicios?.totalElementos ?? 0));
         } catch {
+          if (!horariosPagina.esActual(solicitudPagina)) return;
           setTotalServiciosTrabajador(0);
         }
       } else {
@@ -200,18 +136,15 @@ export default function DetalleServicioScreen({
         setTotalServiciosTrabajador(0);
       }
     } catch (err) {
+      if (!horariosPagina.esActual(solicitudPagina)) return;
       const data = err?.response?.data;
-
-      setError(
-        data?.message ||
-          data?.mensaje ||
-          err?.message ||
-          'No se pudo cargar el detalle del servicio.'
-      );
+      setError(data?.message || data?.mensaje || err?.message || 'No se pudo cargar el detalle del servicio.');
     } finally {
-      setCargando(false);
+      if (horariosPagina.esActual(solicitudPagina)) {
+        setCargando(false);
+      }
     }
-  }, [servicioId]);
+  }, [horariosPagina.pagina, servicioId]);
 
   useEffect(() => {
     cargarDetalle();
@@ -528,6 +461,7 @@ export default function DetalleServicioScreen({
               </View>
             ))
           )}
+        {!cargando && !error ? <PaginationControls {...horariosPagina.props} loading={cargando} /> : null}
         </View>
 
         <View style={styles.tarjeta}>
@@ -548,7 +482,7 @@ export default function DetalleServicioScreen({
               El trabajador todavía no ha definido zonas de cobertura.
             </Text>
           ) : (
-            zonas.map((zona) => (
+            zonasPagina.items.map((zona) => (
               <View
                 key={zona.id}
                 style={styles.zona}
@@ -576,6 +510,7 @@ export default function DetalleServicioScreen({
               </View>
             ))
           )}
+        {!cargando && !error ? <PaginationControls {...zonasPagina.props} loading={cargando} /> : null}
         </View>
 
         {perfilTrabajador ? (
