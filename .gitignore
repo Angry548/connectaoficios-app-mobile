@@ -39,3 +39,4 @@ AGENTS.md
 .agents/
 # Reportes temporales de Component Testing
 coverage/
+reports/components/
