@@ -368,6 +368,8 @@ export default function DetalleSolicitudTrabajadorScreen({
 
   const abrirChat = () => {
     navigation.navigate('Chat', {
+      conversacionId: solicitud?.conversacionId,
+      servicioTitulo: solicitud?.servicioTitulo,
       solicitudId,
     });
   };
@@ -459,10 +461,7 @@ export default function DetalleSolicitudTrabajadorScreen({
   const estiloEstado =
     obtenerEstiloEstado(estado);
 
-  const chatDisponible = [
-    'ACEPTADA',
-    'EN_PROCESO',
-  ].includes(estado);
+  const chatDisponible = Boolean(solicitud);
 
   return (
     <SafeAreaView

@@ -87,6 +87,9 @@ const normalizarSolicitud = (solicitud) => {
       solicitud.id ??
       null,
 
+    conversacionId:
+      solicitud.conversacionId ?? null,
+
     servicioId:
       solicitud.servicioId ??
       null,

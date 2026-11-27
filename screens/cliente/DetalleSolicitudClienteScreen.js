@@ -345,6 +345,8 @@ export default function DetalleSolicitudClienteScreen({
     Keyboard.dismiss();
 
     navigation.navigate('Chat', {
+      conversacionId: solicitud?.conversacionId,
+      servicioTitulo: solicitud?.servicioTitulo,
       solicitudId,
     });
   };

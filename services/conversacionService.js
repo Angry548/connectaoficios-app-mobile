@@ -13,6 +13,8 @@ const normalizarConversacion = (conversacion) => {
       conversacion.idConversacion ??
       null,
 
+    servicioTitulo: conversacion.servicioTitulo ?? '',
+
     solicitudId:
       conversacion.solicitudId ??
       null,

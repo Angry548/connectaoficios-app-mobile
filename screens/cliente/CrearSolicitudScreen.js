@@ -366,6 +366,14 @@ export default function CrearSolicitudScreen({
         'Tu solicitud fue enviada correctamente al trabajador.',
         [
           {
+            text: 'Abrir chat',
+            onPress: () => navigation.navigate('Chat', {
+              conversacionId: solicitudCreada.conversacionId,
+              solicitudId: solicitudCreada.idSolicitud,
+              servicioTitulo: solicitudCreada.servicioTitulo || servicioTitulo,
+            }),
+          },
+          {
             text: 'Ver solicitud',
             onPress: () => {
               navigation.replace(

@@ -193,7 +193,7 @@ export default function ConversacionesScreen({
         tamanio: 10
       });
       if (!paginacion.esActual(solicitudPagina)) return;
-      const lista = pagina?.contenido ?? [];
+      const lista = [...new Map((pagina?.contenido ?? []).filter(item => item.id != null).map(item => [String(item.id), item])).values()];
       paginacion.registrar(pagina);
       setUsuarioId(miId);
       setConversaciones(lista);
@@ -265,6 +265,7 @@ export default function ConversacionesScreen({
 
           return (
             nombre.includes(texto) ||
+            (conversacion.servicioTitulo ?? '').toLowerCase().includes(texto) ||
             solicitud.includes(texto)
           );
         }
@@ -326,6 +327,7 @@ export default function ConversacionesScreen({
           conversacion.id,
         solicitudId:
           conversacion.solicitudId,
+        servicioTitulo: conversacion.servicioTitulo,
         nombreUsuario:
           datos.nombre,
         fotoUsuario:
@@ -619,14 +621,13 @@ export default function ConversacionesScreen({
                   >
                     <UserAvatar fotoUrl={datos.foto} nombre={datos.nombre} size={48} />
 
-                    {conversacion
-                      .puedeEnviarMensajes ? (
+                    {(
                       <View
                         style={
                           styles.estadoPunto
                         }
                       />
-                    ) : null}
+                    )}
                   </View>
 
                   <View
@@ -645,7 +646,7 @@ export default function ConversacionesScreen({
                         }
                         numberOfLines={1}
                       >
-                        {datos.nombre}
+                        {conversacion.servicioTitulo?.trim() || 'Servicio'}
                       </Text>
 
                       <Text
@@ -677,11 +678,7 @@ export default function ConversacionesScreen({
                         }
                         numberOfLines={1}
                       >
-                        Solicitud #
-                        {
-                          conversacion
-                            .solicitudId
-                        }
+                        {datos.nombre}
                       </Text>
                     </View>
 
@@ -693,41 +690,22 @@ export default function ConversacionesScreen({
                       <View
                         style={[
                           styles.estadoChat,
-                          conversacion
-                            .puedeEnviarMensajes
-                            ? styles.estadoChatActivo
-                            : styles.estadoChatLectura,
+                          styles.estadoChatActivo,
                         ]}
                       >
                         <Ionicons
-                          name={
-                            conversacion
-                              .puedeEnviarMensajes
-                              ? 'chatbubble-ellipses-outline'
-                              : 'lock-closed-outline'
-                          }
+                          name="chatbubble-ellipses-outline"
                           size={13}
-                          color={
-                            conversacion
-                              .puedeEnviarMensajes
-                              ? '#0D9488'
-                              : '#667085'
-                          }
+                          color="#0D9488"
                         />
 
                         <Text
                           style={[
                             styles.estadoChatTexto,
-                            conversacion
-                              .puedeEnviarMensajes
-                              ? styles.estadoChatTextoActivo
-                              : styles.estadoChatTextoLectura,
+                            styles.estadoChatTextoActivo,
                           ]}
                         >
-                          {conversacion
-                            .puedeEnviarMensajes
-                            ? 'Chat activo'
-                            : 'Solo lectura'}
+                          Chat activo
                         </Text>
                       </View>
 

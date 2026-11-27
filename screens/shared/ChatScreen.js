@@ -338,7 +338,7 @@ export default function ChatScreen({
         idSolicitud > 0
       ) {
         return conversacionService
-          .obtenerOCrearPorSolicitud(
+          .obtenerConversacionPorSolicitud(
             idSolicitud
           );
       }
@@ -580,8 +580,7 @@ export default function ChatScreen({
     if (
       !contenido ||
       enviando ||
-      !conversacion
-        ?.puedeEnviarMensajes
+      !conversacion?.id
     ) {
       return;
     }
@@ -778,11 +777,7 @@ export default function ChatScreen({
     );
   }
 
-  const puedeEnviar =
-    Boolean(
-      conversacion
-        ?.puedeEnviarMensajes
-    );
+  const puedeEnviar = Boolean(conversacion?.id);
 
 
 
@@ -823,7 +818,7 @@ export default function ChatScreen({
             }
             numberOfLines={1}
           >
-            {nombreUsuario}
+            {conversacion?.servicioTitulo?.trim() || route?.params?.servicioTitulo?.trim() || 'Servicio'}
           </Text>
 
           <View
